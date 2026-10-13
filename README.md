@@ -32,11 +32,14 @@ La base SIRENE ne publie aucune coordonnée. Pour chaque entreprise du ciblage (
 
 Rendement observé : environ une adresse pour quatre à six entreprises de plus de 10 salariés dans l'industrie et le commerce de gros, beaucoup moins pour les très petites entreprises et la restauration. La recherche tourne **jour et nuit** (tâche toutes les deux minutes tant que la réserve est sous deux jours d'envoi), l'envoi aux heures de bureau. Les entreprises examinées sans adresse sont mémorisées (`yontech_prospection_scanned`) et ne sont pas refaites.
 
+## Entreprises sans site internet (offre Querax)
+
+La base SIRENE ne dit pas si une entreprise a un site. L'annuaire **RGE de l'ADEME** (bâtiment, Licence Ouverte) donne l'e-mail déclaré par chaque entreprise qualifiée et son site quand elle en a un : celles qui n'en ont pas (≈ 52 000 lignes actuelles et 119 000 anciennes, surtout des artisans) sont ajoutées à la réserve avec le badge « Sans site », quelle que soit leur taille, département par département, jusqu'à 40 secondes par passage. Elles reçoivent uniquement les modèles dont le **public** est « Sans site internet » (modèle « Site internet », offre de création de site), les autres prospects reçoivent « Avec site internet » (modèle « Refonte de site internet ») ou « Toutes les entreprises ». La mention légale d'origine des données s'adapte (annuaire RGE + SIRENE). Réglable dans Ciblage.
+
 ## Fonctionnement de l'automate
 
 - Chaque entreprise (SIREN) et chaque adresse ne reçoivent **qu'un seul premier message, pour toujours**. Si les relances sont activées (Réglages), jusqu'à deux relances suivent, dans le même fil (« Re : », en-tête `In-Reply-To`), après 7 puis 21 jours par défaut, aux destinataires qui n'ont pas répondu (et, au choix, qui ont ouvert). Le bouton « A répondu » d'un envoi arrête ses relances.
-- Un message à la fois, espacé au hasard (20 à 45 secondes par défaut), du lundi au vendredi de 8 h 30 à 17 h 30, heure de Paris.
-- **Montée en charge activée par défaut** (domaine neuf en prospection) : 50 messages le premier jour, +50 par jour d'envoi, jusqu'au quota réglé (1 000, plafond Hostinger 3 000).
+- Un message à la fois, espacé au hasard, du lundi au vendredi, heure de Paris. Réglage en production au 13 octobre 2026 : 1 500 messages par jour, de 6 h 30 à 18 h, 15 à 35 secondes entre deux messages, sans montée en charge (plafond Hostinger 3 000 ; la boîte Piloz a renvoyé « 454 Try again later » à 1 500 par jour, l'automate patiente alors une heure).
 - **Pause automatique** si la boîte refuse la connexion, avec alerte e-mail depuis la même boîte. Une adresse refusée est exclue automatiquement. Les rebonds reçus après coup sont lus dans la boîte si l'API mail Hostinger est configurée.
 - Messages au nom de l'**Équipe Yontech**, signature graphique avec le logo, vidéo facultative à l'emplacement `{video}`.
 - Score Yontech (0-100) : effectif (30, de 20 à 199 salariés), établissements ouverts (20), chiffre d'affaires (16), croissance (12), ancienneté (10), adresse sur le domaine de l'entreprise (10). La file part par score décroissant.
