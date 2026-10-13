@@ -70,7 +70,8 @@ create table if not exists public.yontech_prospection_settings(
   constraint yontech_prospection_settings_days check(send_days<@'{1,2,3,4,5,6,7}'::smallint[] and cardinality(send_days)>0),
   constraint yontech_prospection_settings_followup_days check(followup1_days between 1 and 90 and followup2_days between 2 and 180 and followup2_days>followup1_days)
 );
-insert into public.yontech_prospection_settings(id) values(1) on conflict(id) do nothing;
+-- Boîte d'envoi de Yontech, pré-remplie ; le mot de passe reste un secret côté serveur.
+insert into public.yontech_prospection_settings(id,sender_email) values(1,'contact@yontech.fr') on conflict(id) do nothing;
 
 -- Secret partagé entre pg_cron et les fonctions réveillées. Il n'est jamais
 -- renvoyé au navigateur. L'adresse de la fonction d'envoi est alignée sur

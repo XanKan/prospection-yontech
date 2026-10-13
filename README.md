@@ -69,11 +69,11 @@ export SUPABASE_ACCESS_TOKEN=sbp_xxx PROJECT_REF=abcdefghijklmnop
 ./deploy.sh configure    # relie index.html et desinscription.html au projet (URL + clé anon)
 ./deploy.sh migrate      # tables, fonctions SQL, tâches pg_cron (rejouable)
 ./deploy.sh functions    # les six fonctions
-YONTECH_ADMIN_EMAILS=vous@yontech.fr YONTECH_SMTP_PASSWORD='…' ./deploy.sh secrets
+YONTECH_ADMIN_EMAILS=vous@yontech.fr YONTECH_SMTP_PASSWORD='mot de passe de contact@yontech.fr' ./deploy.sh secrets
 git commit -am "Projet Supabase" && git push   # publie la page sur GitHub Pages
 ```
 
-Puis, dans l'outil : Réglages → adresse d'envoi (une boîte Hostinger de yontech.fr), Messages → « Envoyer un test », Ciblage → « Volume maximum » → Enregistrer, et « Démarrer l'automate ».
+Puis, dans l'outil : Réglages → vérifier l'adresse d'envoi (contact@yontech.fr, pré-remplie), Messages → « Envoyer un test », Ciblage → « Volume maximum » → Enregistrer, et « Démarrer l'automate ».
 
 Secrets des fonctions : `YONTECH_ADMIN_EMAILS` (obligatoire), `YONTECH_SMTP_PASSWORD` (obligatoire pour envoyer), facultatifs `YONTECH_SMTP_USER`, `YONTECH_SMTP_HOST` (défaut `smtp.hostinger.com`), `YONTECH_SMTP_PORT` (défaut `465`), `YONTECH_SEARCH_API_KEY` (Brave Search), `YONTECH_HOSTINGER_MAIL_TOKEN` et `YONTECH_HOSTINGER_MAILBOX_ID` (rebonds), `YONTECH_TRACKING_BASE`, `YONTECH_UNSUBSCRIBE_PAGE`, `YONTECH_LOGO_URL`.
 
