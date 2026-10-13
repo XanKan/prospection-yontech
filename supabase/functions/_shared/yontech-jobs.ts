@@ -82,13 +82,22 @@ export async function knownFor(db: SupabaseClient, sirens: string[], emails: str
 // sous deux jours d'envoi et le dernier passage date de plus de 90 secondes.
 export async function maybeSource(db: SupabaseClient, force = false, budgetMs = 100_000) {
   const { data: s, error } = await db.from("yontech_prospection_settings")
-    .select("paused,autopilot,autopilot_target,autopilot_min_score,autopilot_batch,daily_cap,sourcing_cursor,last_sourcing_at,require_first_name").eq("id", 1).single();
+    .select("paused,autopilot,autopilot_target,autopilot_min_score,autopilot_batch,daily_cap,sourcing_cursor,last_sourcing_at,require_first_name,site_share").eq("id", 1).single();
   if (error) throw error;
+  // Réserve comptée par campagne : la source RGE (sites internet) remplit
+  // vite, la découverte web (logiciel) lentement. Chaque campagne a sa part
+  // de deux jours d'envoi ; une campagne pleine ne bloque pas l'autre.
+  const share = Math.max(0, Math.min(100, Number(s.site_share ?? 33)));
+  const [{ count: siteQueued }, { count: logicielQueued }] = await Promise.all([
+    db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "queued").eq("data->>campagne", "site"),
+    db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "queued").or("data->>campagne.is.null,data->>campagne.neq.site"),
+  ]);
+  const siteFull = (siteQueued || 0) >= Math.max(Math.round(s.daily_cap * 2 * share / 100), s.autopilot_batch);
+  const logicielFull = (logicielQueued || 0) >= Math.max(Math.round(s.daily_cap * 2 * (100 - share) / 100), s.autopilot_batch);
   if (!force) {
     if (s.paused || !s.autopilot) return { state: "off" };
     if (s.last_sourcing_at && Date.now() - new Date(s.last_sourcing_at).getTime() < 90_000) return { state: "recent" };
-    const { count } = await db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "queued");
-    if ((count || 0) >= Math.max(s.daily_cap * 2, s.autopilot_batch)) return { state: "full", queued: count };
+    if (siteFull && logicielFull) return { state: "full", queued: { site: siteQueued, logiciel: logicielQueued } };
   }
   // Horodatage posé avant le balayage : deux réveils rapprochés ne lancent
   // pas deux balayages en parallèle.
@@ -97,6 +106,7 @@ export async function maybeSource(db: SupabaseClient, force = false, budgetMs = 
     target: s.autopilot_target, cursor: s.sourcing_cursor, batch: s.autopilot_batch, minScore: s.autopilot_min_score,
     requireFirstName: s.require_first_name === true, deadline: Date.now() + budgetMs,
     searchApiKey: Deno.env.get("YONTECH_SEARCH_API_KEY") || undefined,
+    skipRge: siteFull, skipWeb: logicielFull,
     known: (sirens, emails) => knownFor(db, sirens, emails),
     enqueue: async (items) => {
       const { data, error: enqueueError } = await db.rpc("yontech_prospection_enqueue", { items, target_origin: "autopilote" });

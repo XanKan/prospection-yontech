@@ -61,6 +61,8 @@ async function getJson(url: string, attempt = 0): Promise<any> {
 export async function runSourcing(options: {
   target: unknown; cursor: unknown; batch: number; minScore: number; deadline: number; requireFirstName?: boolean;
   searchApiKey?: string;
+  // Réserve pleine pour une campagne : sa source est sautée ce passage.
+  skipRge?: boolean; skipWeb?: boolean;
   // Entreprises déjà connues (file, historique, exclusions, déjà examinées sans adresse).
   known: (sirens: string[], emails: string[]) => Promise<{ sirens: Set<string>; emails: Set<string> }>;
   enqueue: (items: QueueItem[]) => Promise<number>;
@@ -84,7 +86,7 @@ export async function runSourcing(options: {
   // entreprises ont déjà leur e-mail : pas de découverte web, juste la fiche
   // SIRENE pour la personnalisation. La tranche d'effectif ne s'applique pas
   // (ce sont surtout des artisans), la zone si.
-  if (target.sansSite) {
+  if (target.sansSite && !options.skipRge) {
     const prefixes = postalPrefixes(target.deps);
     const rge: RgeCursor = cursor.rge && typeof cursor.rge.i === "number" ? cursor.rge : { i: 0, page: 1, histo: false, done: false };
     cursor.rge = rge;
@@ -146,7 +148,7 @@ export async function runSourcing(options: {
     }
   }
 
-  while (report.added < options.batch && Date.now() < options.deadline - 12_000 && report.errors < 6) {
+  while (!options.skipWeb && report.added < options.batch && Date.now() < options.deadline - 12_000 && report.errors < 6) {
     const pending: number[] = [];
     for (let k = 0; k < total(); k++) if (!doneSet.has(k)) pending.push(k);
     if (!pending.length) { report.exhausted = true; break; }
