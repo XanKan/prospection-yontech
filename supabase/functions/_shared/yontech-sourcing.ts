@@ -102,7 +102,9 @@ export async function runSourcing(options: {
     // seule l'activité demandée (une division NAF couvre tous ses codes).
     const companies = (data.results || []).map((r: unknown) => normalizeCompany(r))
       .filter((c: Company) => /^\d{9}$/.test(c.siren) && (!target.deps.length || target.deps.includes(c.dep)))
-      .filter((c: Company) => !target.nafs.length || target.nafs.some((n) => n.length === 2 ? c.naf.startsWith(n) : c.naf === n)) as Company[];
+      .filter((c: Company) => !target.nafs.length || target.nafs.some((n) => n.length === 2 ? c.naf.startsWith(n) : c.naf === n))
+      // Associations, syndicats, partis et organismes publics sont écartés, sauf ciblage explicite de leur activité.
+      .filter((c: Company) => !c.association || target.nafs.some((n) => c.naf.startsWith(n.slice(0, 2)))) as Company[];
     report.scanned += companies.length;
     if (!companies.length) continue;
 

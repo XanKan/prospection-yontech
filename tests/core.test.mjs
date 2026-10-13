@@ -101,6 +101,12 @@ const company = normalizeCompany({
 }, Date.parse('2026-10-01'));
 assert.equal(company.metier, 'fabrication de produits métalliques');
 assert.equal(company.prenom, 'Jean');
+assert.equal(company.association, false);
+assert.equal(normalizeCompany({ siren: '1', activite_principale: '94.92Z', nature_juridique: '9220' }).association, true, 'parti politique');
+assert.equal(normalizeCompany({ siren: '1', activite_principale: '47.11F', nature_juridique: '9220' }).association, true, 'association même hors NAF 94');
+assert.equal(normalizeCompany({ siren: '1', activite_principale: '84.11Z', nature_juridique: '7210' }).association, true, 'commune');
+assert.equal(normalizeCompany({ siren: '1', activite_principale: '56.10A', nature_juridique: '5710' }).association, false);
+assert.ok(!extractEmails('<a href="mailto:assistance@shopify.com">aide</a> contact@bois-et-bougies.fr', 'bois-et-bougies.fr').some((e) => /shopify/.test(e.email)), 'adresse de plateforme écartée');
 assert.equal(company.siret, '12345678900012');
 assert.equal(scoreCompany(company), 30 + 12 + 12 + 12 + 10 + 0);
 company.email = 'contact@dupont-mecanique.fr'; company.ownDomain = true; company.site = 'https://dupont-mecanique.fr';

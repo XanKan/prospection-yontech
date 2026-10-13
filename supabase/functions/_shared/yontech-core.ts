@@ -389,6 +389,8 @@ export type Company = {
   sitesOuverts: number | null; ca: number | null; growth: number | null; age: number | null;
   // Découverte web : site vérifié, adresse retenue, méthode (guess, search), adresse sur le domaine du site.
   email: string; site: string; how: string; ownDomain: boolean; tel: string;
+  // Association, syndicat, parti, organisme public : pas une entreprise à prospecter.
+  association: boolean;
 };
 
 // deno-lint-ignore no-explicit-any
@@ -410,6 +412,9 @@ export function normalizeCompany(r: any, now = Date.now()): Company {
     sitesOuverts: r?.nombre_etablissements_ouverts ?? null, ca: fin.ca, growth: fin.growth,
     age: Number.isFinite(created) ? (now - created) / (365.25 * 864e5) : null,
     email: "", site: "", how: "", ownDomain: false, tel: "",
+    // NAF 94 (organisations associatives, syndicats, partis), 84 (administration),
+    // nature juridique 7xxx (personnes morales de droit public) ou 92xx (associations).
+    association: /^(94|84)/.test(naf) || !!r?.complements?.est_association || /^(7|92)/.test(String(r?.nature_juridique || "")),
   };
 }
 
@@ -484,7 +489,9 @@ function deobfuscate(html: string) {
 }
 
 const EMAIL_SCAN_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
-const BAD_EMAIL_RE = /\.(png|jpe?g|gif|svg|webp|css|js|pdf|woff2?)$|^(noreply|no-reply|nepasrepondre|ne-pas-repondre|mailer-daemon|postmaster|webmaster|abuse|dpo|rgpd|privacy|cnil|recrutement|candidature|rh|jobs?|carriere|careers|presse|press|stage|alternance|cv)@|@(example|exemple|domain|domaine|email|mail|yourmail|votremail|test|sentry|wixpress|wordpress|godaddy|ionos|ovh|o2switch|1and1|cloudflare|googlemail|placeholder)\b|^[0-9a-f]{20,}@|sentry\.io$|@.*\.(png|jpg)$/i;
+// Adresses techniques, et adresses des plateformes qui hébergent ou
+// équipent le site (Shopify, Wix, hébergeurs, outils) : jamais celles de l'entreprise.
+const BAD_EMAIL_RE = /\.(png|jpe?g|gif|svg|webp|css|js|pdf|woff2?)$|^(noreply|no-reply|nepasrepondre|ne-pas-repondre|mailer-daemon|postmaster|webmaster|abuse|dpo|rgpd|privacy|cnil|recrutement|candidature|rh|jobs?|carriere|careers|presse|press|stage|alternance|cv)@|@(example|exemple|domain|domaine|email|mail|yourmail|votremail|test|sentry|wixpress|wix|wordpress|squarespace|shopify|jimdo|weebly|webflow|godaddy|ionos|ovh|ovhcloud|o2switch|1and1|hostinger|gandi|infomaniak|cloudflare|google|googlemail|microsoft|apple|facebook|instagram|linkedin|youtube|paypal|stripe|mailchimp|sendinblue|brevo|hubspot|zendesk|freshdesk|intercom|typeform|calendly|doctolib|lafourchette|thefork|ubereats|deliveroo|placeholder)\b|^[0-9a-f]{20,}@|sentry\.io$|@.*\.(png|jpg)$/i;
 
 // Adresses trouvées dans une page, classées : adresse du dirigeant
 // (prénom.nom), adresses génériques de contact, puis les autres, les adresses
