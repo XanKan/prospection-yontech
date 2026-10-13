@@ -21,6 +21,8 @@ begin;
 
 create extension if not exists pgcrypto;
 create extension if not exists pg_net with schema extensions;
+-- Planificateur : sur un projet neuf, pg_cron n'est pas activé par défaut.
+create extension if not exists pg_cron;
 
 /* ===================== Tables ===================== */
 

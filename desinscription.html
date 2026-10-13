@@ -42,7 +42,7 @@
 (function(){
   "use strict";
   // Adresse du projet Supabase qui héberge l'automate (même valeur que dans index.html).
-  var ENDPOINT = "__SUPABASE_URL__/functions/v1/yontech-prospection-unsubscribe";
+  var ENDPOINT = "https://sdygujqnpsbnmmkjdjfz.supabase.co/functions/v1/yontech-prospection-unsubscribe";
   var token = new URLSearchParams(location.search).get("t") || "";
   var button = document.getElementById("confirm");
   var state = document.getElementById("state");

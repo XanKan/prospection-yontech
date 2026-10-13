@@ -37,6 +37,13 @@ print(json.dumps({"query": open(sys.argv[1], encoding="utf-8").read()}))
 PY
   echo
   echo "   (réponse attendue : [] ou un numéro de tâche cron)"
+  # L'adresse de réveil des fonctions dépend du projet : posée tout de suite,
+  # sans attendre le premier chargement de l'outil.
+  echo "→ Adresse de réveil des fonctions"
+  python3 -c 'import json,sys;print(json.dumps({"query":"update public.yontech_prospection_runtime set sender_url=%s where id=1" % repr("https://"+sys.argv[1]+".supabase.co/functions/v1/yontech-prospection-sender")}))' "$PROJECT_REF" \
+    | curl -sS -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+    -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" -H "Content-Type: application/json" --data-binary @-
+  echo
 }
 
 functions() {
