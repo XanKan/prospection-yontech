@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Yontech Prospection</title>
+<link rel="icon" type="image/png" href="assets/favicon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --ink:#15161f; --ink-2:#1e2030; --ink-3:#2a2c3f;
+    --paper:#f6f6fb; --panel:#fff;
+    --violet:#4F46E5; --violet-2:#6D5EF8; --violet-soft:#ecebff; --violet-dark:#3b32c4; --lime:#B8F03C;
+    --muted:#5b5d72; --line:#e8e8f2; --line-2:#f1f1f7;
+    --ok:#17a06a; --ok-soft:#e4f5ee;
+    --warn:#e08a2c; --warn-soft:#fdf1e0;
+    --danger:#e0473f; --danger-soft:#fdeceb;
+    --blue:#3a7de0; --blue-soft:#e8f0fc;
+    --r:12px; --r-sm:8px;
+    --sh:0 1px 2px rgba(21,22,31,.05),0 4px 14px rgba(21,22,31,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{min-height:100%}
+  body{font-family:"Archivo",system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--violet)}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  input,select,textarea{font:inherit;color:inherit}
+  .num{font-variant-numeric:tabular-nums}
+  ::selection{background:var(--violet-soft)}
+  [hidden]{display:none!important}
+
+  /* ================= CONNEXION ================= */
+  #login{position:fixed;inset:0;background:radial-gradient(circle at 20% 10%,#1d1b4a,#0E1116 55%);display:flex;align-items:center;justify-content:center;padding:24px 16px;z-index:200}
+  #login .box{background:var(--panel);border-radius:18px;padding:34px 30px;width:100%;max-width:400px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+  .logo-row{display:flex;align-items:center;gap:11px;margin-bottom:20px}
+  .logo-row img{width:40px;height:40px;border-radius:11px}
+  .logo-row b{display:block;font-size:1.2rem;font-variation-settings:"wdth" 108;font-weight:850;letter-spacing:-.02em;line-height:1.1}
+  .logo-row span{font-size:.76rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  #login p.lead{color:var(--muted);font-size:.9rem;margin-bottom:18px}
+  #login label{display:block;font-size:.8rem;font-weight:700;margin:0 0 5px}
+  #login input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:13px;background:var(--paper)}
+  #login input:focus{outline:2px solid var(--violet);outline-offset:1px;background:#fff}
+  #login .b{width:100%;justify-content:center;padding:12px}
+  #loginErr{color:var(--danger);font-size:.87rem;font-weight:600;margin-top:12px;min-height:1.2em}
+  #login .hint{font-size:.8rem;color:var(--muted);margin-top:14px}
+
+  /* ================= SHELL ================= */
+  #app{min-height:100vh;display:grid;grid-template-columns:236px 1fr}
+  #app>*{min-width:0}
+  .side{background:var(--ink);color:#fff;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .side-top{padding:20px 18px 16px}
+  .mark{display:flex;align-items:center;gap:10px}
+  .mark img{width:30px;height:30px;border-radius:8px;flex:none}
+  .mark-name{font-variation-settings:"wdth" 108;font-weight:850;font-size:1.02rem;letter-spacing:-.02em;line-height:1.1}
+  .mark-sub{font-size:.7rem;color:#8e90a8;letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-top:1px}
+  nav.side-nav{padding:6px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav-sep{font-size:.68rem;color:#6f7190;text-transform:uppercase;letter-spacing:.07em;font-weight:800;padding:14px 11px 5px}
+  .nav-b{display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;border-radius:var(--r-sm);color:#b9bacd;font-size:.9rem;font-weight:600;text-align:left;transition:background .13s,color .13s}
+  .nav-b:hover{background:var(--ink-2);color:#fff}
+  .nav-b.on{background:var(--violet);color:#fff}
+  .nav-b svg{flex:none;opacity:.9}
+  .nav-b .pill{margin-left:auto;background:rgba(255,255,255,.13);border-radius:99px;padding:1px 7px;font-size:.72rem;font-weight:700}
+  .nav-b.on .pill{background:rgba(255,255,255,.24)}
+  .side-foot{margin-top:auto;padding:14px 18px 18px;border-top:1px solid var(--ink-3);font-size:.76rem;color:#8e90a8;line-height:1.45}
+  .side-foot b{display:block;color:#d6d7e6;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .side-foot button{margin-top:8px;color:#b9bacd;font-weight:700;font-size:.78rem;text-decoration:underline}
+  .side-foot button:hover{color:#fff}
+
+  main{min-width:0;display:flex;flex-direction:column}
+  .top{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
+  .top h1{font-size:1.12rem;font-variation-settings:"wdth" 105;font-weight:800;letter-spacing:-.01em}
+  .top p{font-size:.84rem;color:var(--muted)}
+  .top-act{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .content{padding:24px 28px 60px;flex:1}
+  .view{display:none}
+  .view.on{display:block}
+
+  /* ================= BOUTONS ================= */
+  .b{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:var(--r-sm);font-weight:700;font-size:.88rem;transition:background .13s,border-color .13s,opacity .13s;border:1px solid transparent;white-space:nowrap}
+  .b svg{flex:none}
+  .b-main{background:var(--violet);color:#fff}
+  .b-main:hover{background:var(--violet-dark)}
+  .b-ok{background:var(--ok);color:#fff}
+  .b-ok:hover{background:#12895a}
+  .b-dark{background:var(--ink);color:#fff}
+  .b-dark:hover{background:var(--ink-2)}
+  .b-out{border-color:var(--line);background:var(--panel);color:var(--ink)}
+  .b-out:hover{border-color:#cfd0e4;background:var(--paper)}
+  .b-danger{border-color:#f3c9c6;background:var(--panel);color:var(--danger)}
+  .b-danger:hover{background:var(--danger-soft)}
+  .b:disabled{opacity:.45;cursor:not-allowed}
+  .b-sm{padding:6px 12px;font-size:.83rem}
+  .b-xs{padding:4px 9px;font-size:.78rem;border-radius:6px}
+  :focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+
+  /* ================= STATUT ================= */
+  .st{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;font-size:.8rem;font-weight:800;background:var(--line-2);color:var(--muted)}
+  .st i{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+  .st-ok{background:var(--ok-soft);color:var(--ok)} .st-ok i{animation:pulse 1.6s infinite}
+  .st-warn{background:var(--warn-soft);color:#b96c14}
+  .st-blue{background:var(--blue-soft);color:var(--blue)}
+  .st-danger{background:var(--danger-soft);color:var(--danger)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(23,160,106,.5)}70%{box-shadow:0 0 0 7px rgba(23,160,106,0)}100%{box-shadow:0 0 0 0 rgba(23,160,106,0)}}
+
+  /* ================= CARTES ================= */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+  .card + .card{margin-top:16px}
+  .card-h{padding:15px 20px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .card-h h2{font-size:.97rem;font-weight:800;letter-spacing:-.01em}
+  .card-h .sub{font-size:.82rem;color:var(--muted)}
+  .card-h .right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .card-b{padding:18px 20px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .grid2>.card{margin-top:0}
+  .grid2.wide-right{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+  @media(max-width:980px){.grid2,.grid2.wide-right{grid-template-columns:1fr}}
+
+  .hero{display:flex;gap:22px;align-items:center;flex-wrap:wrap;padding:22px 24px}
+  .hero-dot{width:58px;height:58px;border-radius:16px;display:grid;place-items:center;flex:none;background:var(--line-2);color:var(--muted)}
+  .hero-dot.ok{background:var(--ok-soft);color:var(--ok)} .hero-dot.warn{background:var(--warn-soft);color:#b96c14}
+  .hero-dot.blue{background:var(--blue-soft);color:var(--blue)} .hero-dot.danger{background:var(--danger-soft);color:var(--danger)}
+  .hero-txt{flex:1;min-width:220px}
+  .hero-txt h2{font-size:1.35rem;font-weight:850;letter-spacing:-.02em;line-height:1.2}
+  .hero-txt p{color:var(--muted);font-size:.92rem;margin-top:3px}
+  .hero-act{display:flex;gap:9px;flex-wrap:wrap}
+  .checklist{list-style:none;margin-top:12px;display:grid;gap:7px}
+  .checklist li{display:flex;align-items:center;gap:9px;font-size:.9rem;font-weight:600}
+  .checklist li i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:.75rem;font-weight:900;flex:none;background:var(--danger-soft);color:var(--danger)}
+  .checklist li.done i{background:var(--ok-soft);color:var(--ok)}
+  .checklist li.done{color:var(--muted)}
+  .checklist button{color:var(--violet);font-weight:700;text-decoration:underline;font-size:.86rem}
+
+  .banner{display:flex;gap:12px;align-items:flex-start;padding:13px 16px;border-radius:var(--r-sm);font-size:.88rem;margin-bottom:16px;border:1px solid}
+  .banner.warn{background:var(--warn-soft);border-color:#f6d9b3;color:#8a5212}
+  .banner.err{background:var(--danger-soft);border-color:#f3c9c6;color:#9b2c25}
+  .banner.info{background:var(--violet-soft);border-color:#ddd8ff;color:var(--violet-dark)}
+  .banner b{color:inherit}
+  .banner .grow{flex:1}
+
+  /* ================= KPI ================= */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-top:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sh)}
+  .kpi .lab{font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+  .kpi .val{font-size:1.7rem;font-weight:850;letter-spacing:-.03em;margin-top:4px;line-height:1.1}
+  .kpi .val small{font-size:.95rem;color:var(--muted);font-weight:700;letter-spacing:0}
+  .kpi .foot{font-size:.79rem;color:var(--muted);margin-top:3px}
+  .kpi.ka{border-left:3px solid var(--violet)} .kpi.kb{border-left:3px solid var(--ok)}
+  .kpi.kc{border-left:3px solid var(--warn)} .kpi.kd{border-left:3px solid var(--blue)} .kpi.ke{border-left:3px solid var(--danger)}
+  .meter{height:6px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-top:8px}
+  .meter i{display:block;height:100%;background:linear-gradient(90deg,var(--violet),var(--violet-2));border-radius:99px;transition:width .3s}
+
+  .days{display:flex;align-items:flex-end;gap:6px;height:152px;padding:10px 0 4px}
+  .days div{flex:1 0 34px;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:34px}
+  .days i{display:block;width:100%;max-width:26px;border-radius:5px 5px 2px 2px;background:var(--violet);min-height:2px}
+  .days i.zero{background:var(--line)}
+  .days span{font-size:.66rem;color:var(--muted);font-weight:700}
+  .days b{font-size:.7rem;font-weight:800}
+
+  .list{list-style:none}
+  .list li{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line-2);font-size:.87rem;min-width:0}
+  .list li:last-child{border-bottom:0}
+  .list li .grow{flex:1;min-width:0}
+  .list li .grow b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .list li .grow span{display:block;color:var(--muted);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ================= FORMULAIRES ================= */
+  .fset{padding:17px 20px;border-bottom:1px solid var(--line-2)}
+  .fset:last-of-type{border-bottom:0}
+  .fset-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:11px}
+  .fset-h h3{font-size:.87rem;font-weight:800}
+  .fset-h .sub{font-size:.8rem;color:var(--muted)}
+  .fset-h .spacer{margin-left:auto}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;border:1px solid var(--line);border-radius:99px;padding:5px 13px;background:var(--panel);font-size:.85rem;font-weight:600;transition:background .12s,border-color .12s,color .12s;position:relative}
+  .chip:hover{border-color:#cfd0e4}
+  .chip input{position:absolute;opacity:0;width:0;height:0}
+  .chip:has(input:checked){background:var(--ink);color:#fff;border-color:var(--ink)}
+  .chip:has(input:focus-visible){outline:2px solid var(--violet);outline-offset:2px}
+  button.chip{font-family:inherit}
+  .seg{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;gap:3px;flex-wrap:wrap}
+  .seg label{cursor:pointer;padding:6px 13px;border-radius:6px;font-size:.85rem;font-weight:700;color:var(--muted);transition:background .12s,color .12s;position:relative}
+  .seg input{position:absolute;opacity:0;width:0;height:0}
+  .seg label:has(input:checked){background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(21,22,31,.12)}
+  .inp{padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);font-size:.9rem;width:100%}
+  .inp:focus{outline:2px solid var(--violet);outline-offset:0;border-color:transparent}
+  select.inp{font-weight:600;width:auto;min-width:200px}
+  textarea.inp{resize:vertical;min-height:90px;line-height:1.55}
+  .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px 18px}
+  .fld>label:not(.swi){display:block;font-size:.78rem;font-weight:800;margin-bottom:5px;color:var(--ink)}
+  .fld .help{font-size:.78rem;color:var(--muted);margin-top:4px}
+  .fld.full{grid-column:1/-1}
+  .tpl-fields{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+  @media(max-width:700px){.tpl-fields{grid-template-columns:1fr}}
+  .inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.88rem;color:var(--muted);font-weight:600}
+  .inline .inp{width:78px;color:var(--ink)}
+  .swi{display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-size:.88rem;font-weight:600;position:relative}
+  .swi input{position:absolute;opacity:0;width:0;height:0}
+  .swi i{width:36px;height:21px;border-radius:99px;background:#d4d5e4;position:relative;transition:background .15s;flex:none}
+  .swi i:after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .swi input:checked + i{background:var(--violet)}
+  .swi input:checked + i:after{transform:translateX(15px)}
+  .swi input:focus-visible + i{outline:2px solid var(--violet);outline-offset:2px}
+  .run{padding:15px 20px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;background:var(--paper);border-top:1px solid var(--line-2);border-radius:0 0 var(--r) var(--r)}
+  code.k{background:var(--line-2);border-radius:5px;padding:1px 6px;font-size:.82rem;word-break:break-all}
+
+  /* ================= PROGRESSION ================= */
+  #prog{display:none;margin-top:16px}
+  #prog.on{display:block}
+  .bar{height:7px;background:var(--line-2);border-radius:99px;overflow:hidden;margin:14px 0 12px}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--violet),var(--violet-2));border-radius:99px;transition:width .25s}
+  .prog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px}
+  .prog-grid div{font-size:.8rem;color:var(--muted);font-weight:600}
+  .prog-grid b{display:block;font-size:1.25rem;font-weight:850;color:var(--ink);letter-spacing:-.02em}
+  .msg{font-size:.88rem;font-weight:600;margin-top:12px}
+  .msg.err{color:var(--danger)} .msg.ok{color:var(--ok)} .msg.warn{color:var(--warn)}
+
+  /* ================= GRAPHIQUES ================= */
+  .brow{display:grid;grid-template-columns:118px 1fr 54px;align-items:center;gap:11px;margin-bottom:8px;font-size:.83rem}
+  .brow:last-child{margin-bottom:0}
+  .brow .nm{color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .brow .tr{background:var(--line-2);border-radius:99px;height:9px;overflow:hidden}
+  .brow .tr>i{display:block;height:100%;border-radius:99px;background:var(--violet);transition:width .3s}
+  .brow .tr>i.t-prio{background:var(--warn)} .brow .tr>i.t-bon{background:var(--ok)} .brow .tr>i.t-qual{background:#b9bacd}
+  .brow .vl{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+
+  /* ================= TABLEAUX ================= */
+  .tbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--line-2)}
+  .search-in{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 11px;background:var(--paper);min-width:200px;flex:1;max-width:340px}
+  .search-in input{border:0;background:none;outline:0;width:100%;font-size:.87rem}
+  .search-in svg{flex:none;color:var(--muted)}
+  .selbar{display:none;align-items:center;gap:10px;padding:10px 20px;background:var(--violet-soft);border-bottom:1px solid #ddd8ff;font-size:.86rem;font-weight:700;color:var(--violet-dark);flex-wrap:wrap}
+  .selbar.on{display:flex}
+  .tscroll{overflow-x:auto}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:.855rem}
+  thead th{text-align:left;background:var(--paper);color:var(--muted);font-weight:700;font-size:.74rem;text-transform:uppercase;letter-spacing:.04em;padding:9px 13px;white-space:nowrap;border-bottom:1px solid var(--line)}
+  th.srt{cursor:pointer;user-select:none}
+  th.srt:hover{color:var(--ink)}
+  th.srt span{opacity:.35;margin-left:3px}
+  th.srt.act{color:var(--ink)} th.srt.act span{opacity:1;color:var(--violet)}
+  tbody td{padding:10px 13px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  tbody tr{transition:background .1s}
+  tbody tr:hover{background:var(--paper)}
+  tbody tr.sel{background:var(--violet-soft)}
+  tbody tr.click{cursor:pointer}
+  td.nw{white-space:nowrap}
+  .cbx{width:15px;height:15px;accent-color:var(--violet);cursor:pointer}
+  .co{font-weight:800;letter-spacing:-.01em;cursor:pointer;display:block}
+  .co:hover{color:var(--violet)}
+  .meta{font-size:.78rem;color:var(--muted);margin-top:1px;overflow-wrap:anywhere}
+  .muted{color:var(--muted)}
+  .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+  .tag{font-size:.68rem;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--line-2);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+  .tag.ex{background:var(--warn-soft);color:var(--warn)}
+  .tag.gr{background:var(--violet-soft);color:var(--violet)}
+  .tag.in{background:var(--blue-soft);color:var(--blue)}
+  .sc{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:9px;font-weight:850;font-size:.92rem;font-variant-numeric:tabular-nums}
+  .sc-prio{background:var(--warn-soft);color:#b96c14} .sc-bon{background:var(--ok-soft);color:var(--ok)} .sc-qual{background:var(--line-2);color:var(--muted)}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap}
+  .badge.queued{background:var(--violet-soft);color:var(--violet)} .badge.sending{background:var(--blue-soft);color:var(--blue)}
+  .badge.sent{background:var(--ok-soft);color:var(--ok)} .badge.failed{background:var(--danger-soft);color:var(--danger)}
+  .badge.skipped{background:var(--line-2);color:var(--muted)}
+  .badge.open{background:var(--blue-soft);color:var(--blue)} .badge.video{background:var(--violet-soft);color:var(--violet)}
+  .badge.clic{background:var(--ok-soft);color:var(--ok)} .badge.off{background:var(--line-2);color:var(--muted);font-weight:600}
+  .badge.unsub{background:var(--danger-soft);color:var(--danger)}
+  .ic{display:inline-grid;place-items:center;width:27px;height:27px;border-radius:6px;color:var(--muted);transition:background .12s,color .12s}
+  .ic:hover{background:var(--line-2);color:var(--ink)}
+  .ic.ok{color:var(--ok)}
+  .empty{padding:42px 20px;text-align:center;color:var(--muted)}
+  .empty b{display:block;color:var(--ink);font-size:1rem;margin-bottom:5px}
+  .tabs{display:flex;gap:4px;padding:10px 16px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tab{padding:9px 14px;border-radius:8px 8px 0 0;font-weight:700;font-size:.87rem;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab:hover{color:var(--ink)}
+  .tab.on{color:var(--violet);border-bottom-color:var(--violet)}
+  .tab .pill{background:var(--line-2);border-radius:99px;padding:0 7px;font-size:.72rem;margin-left:4px}
+  .tab.on .pill{background:var(--violet-soft)}
+  .pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 20px;font-size:.84rem;color:var(--muted);border-top:1px solid var(--line-2)}
+
+  /* ================= MODÈLES ================= */
+  .tpl-wrap{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+  @media(max-width:1000px){.tpl-wrap{grid-template-columns:1fr}}
+  .tpl-item{display:block;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);margin-bottom:8px;transition:border-color .12s,background .12s}
+  .tpl-item:hover{border-color:#cfd0e4}
+  .tpl-item.on{border-color:var(--violet);background:var(--violet-soft)}
+  .tpl-item b{display:block;font-size:.9rem}
+  .tpl-item span{display:block;font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tpl-item em{font-style:normal;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+  .tpl-item em.on{color:var(--ok)} .tpl-item em.off{color:var(--muted)}
+  .vars{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .vars button{border:1px dashed #c9c4ff;background:var(--violet-soft);color:var(--violet-dark);border-radius:6px;padding:3px 8px;font-size:.78rem;font-weight:700}
+  .vars button:hover{background:#e3defe}
+  .mail{border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:#fff}
+  .mail-h{padding:12px 16px;background:var(--paper);border-bottom:1px solid var(--line);font-size:.84rem;display:grid;gap:3px}
+  .mail-h span{color:var(--muted)}
+  .mail-h b{font-weight:800}
+  .mail-b{padding:16px;font:14.5px/1.6 Arial,Helvetica,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;color:#1f2030}
+  .mail-b .foot{display:block;margin-top:16px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:#8a8ca0;line-height:1.5}
+  .mail-frame{display:block;width:100%;border:0;min-height:320px;background:#fff}
+
+  /* ================= MODALE ================= */
+  .ov{display:none;position:fixed;inset:0;background:rgba(21,22,31,.5);z-index:100;padding:32px 16px;overflow-y:auto;backdrop-filter:blur(2px)}
+  .ov.on{display:block}
+  .mod{background:var(--panel);max-width:820px;margin:0 auto;border-radius:var(--r);box-shadow:0 24px 70px rgba(0,0,0,.3);overflow:hidden}
+  .mod-h{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:14px}
+  .mod-h h2{font-size:1.12rem;font-weight:850;letter-spacing:-.02em;overflow-wrap:anywhere}
+  .mod-h .sub{font-size:.85rem;color:var(--muted);margin-top:2px}
+  .mod-h .x{margin-left:auto;flex:none}
+  .mod-b{padding:20px 22px;max-height:66vh;overflow-y:auto}
+  .mod-f{padding:13px 22px;border-top:1px solid var(--line);background:var(--paper);display:flex;gap:9px;flex-wrap:wrap}
+  .dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px 20px;margin-bottom:20px}
+  .dl>div{min-width:0}
+  .dl dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin-bottom:2px}
+  .dl dd{font-weight:600;font-size:.9rem;word-break:break-word}
+  .sect-t{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:800;margin:0 0 11px;padding-bottom:7px;border-bottom:1px solid var(--line-2)}
+  .cp{display:inline-flex;align-items:center;gap:5px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:.8rem;font-weight:700;margin-left:6px}
+  .cp:hover{border-color:var(--violet);color:var(--violet)}
+  .lnks{display:flex;gap:8px;flex-wrap:wrap}
+  .lnks a{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 13px;font-size:.84rem;font-weight:700;color:var(--ink);text-decoration:none}
+  .lnks a:hover{border-color:var(--violet);color:var(--violet)}
+
+  /* ================= CARTE ================= */
+  #map{height:min(70vh,660px);border-radius:var(--r);border:1px solid var(--line);z-index:1}
+  .leaflet-container{font-family:inherit;border-radius:var(--r)}
+  .lg{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:.83rem;color:var(--muted);font-weight:600}
+  .lg span{display:inline-flex;align-items:center;gap:6px}
+  .lg i{width:11px;height:11px;border-radius:50%;display:inline-block}
+
+  .note{font-size:.83rem;color:var(--muted);line-height:1.55}
+  .note + .note{margin-top:9px}
+  .note b{color:var(--ink)}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:var(--r-sm);font-size:.87rem;font-weight:700;z-index:300;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:calc(100vw - 32px);text-align:center}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .spin{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  @media(max-width:860px){
+    #app{grid-template-columns:1fr}
+    .side{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto}
+    .side-top{padding:10px 14px} .side-foot,.nav-sep{display:none}
+    .mark-name,.mark-sub{display:none}
+    nav.side-nav{flex-direction:row;padding:8px 10px}
+    .nav-b span.t{display:none} .nav-b{padding:9px}
+    .top,.content{padding-left:16px;padding-right:16px}
+    .hero{padding:18px 16px}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ============================ CONNEXION ============================ -->
+<div id="login">
+  <div class="box">
+    <div class="logo-row">
+      <img src="assets/yontech-logo.svg" alt="">
+      <div><b>Yontech Prospection</b><span>Outil interne</span></div>
+    </div>
+    <form id="loginForm">
+      <p class="lead">Connectez-vous avec votre compte Yontech.</p>
+      <label for="lEmail">Adresse e-mail</label>
+      <input type="email" id="lEmail" autocomplete="username" required>
+      <label for="lPwd">Mot de passe</label>
+      <input type="password" id="lPwd" autocomplete="current-password" required>
+      <button type="submit" class="b b-main" id="lBtn">Se connecter</button>
+    </form>
+    <form id="mfaForm" hidden>
+      <p class="lead">Saisissez le code à 6 chiffres de votre application d'authentification.</p>
+      <label for="lCode">Code de vérification</label>
+      <input type="text" id="lCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+      <button type="submit" class="b b-main" id="mBtn">Valider</button>
+      <p class="hint"><button type="button" class="b b-out b-xs" id="mBack">Changer de compte</button></p>
+    </form>
+    <p id="loginErr" role="alert"></p>
+  </div>
+</div>
+
+<!-- ============================ APPLICATION ============================ -->
+<div id="app" hidden>
+
+  <aside class="side">
+    <div class="side-top">
+      <div class="mark">
+        <img src="assets/yontech-logo.svg" alt="">
+        <div><div class="mark-name">Prospection</div><div class="mark-sub">Yontech</div></div>
+      </div>
+    </div>
+    <nav class="side-nav">
+      <button class="nav-b on" data-view="auto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg><span class="t">Automate</span></button>
+      <div class="nav-sep">Paramètres</div>
+      <button class="nav-b" data-view="target"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="t">Ciblage</span></button>
+      <button class="nav-b" data-view="tpl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg><span class="t">Messages</span></button>
+      <button class="nav-b" data-view="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="t">Réglages</span></button>
+      <div class="nav-sep">Historique</div>
+      <button class="nav-b" data-view="log"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg><span class="t">Envois</span><span class="pill num" id="pillQueue">0</span></button>
+      <button class="nav-b" data-view="supp"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg><span class="t">Exclusions</span></button>
+    </nav>
+    <div class="side-foot">
+      Connecté en tant que<b id="whoami">—</b>
+      <button type="button" id="bLogout">Se déconnecter</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <div>
+        <h1 id="topT">Automate</h1>
+        <p id="topS"></p>
+      </div>
+      <div class="top-act">
+        <span class="st" id="topStatus"><i></i><span>…</span></span>
+        <button type="button" class="b b-sm b-ok" id="bTopToggle" hidden>Démarrer</button>
+        <button type="button" class="b b-sm b-out" id="bHelp">Comment ça marche</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ==================== AUTOMATE ==================== -->
+      <section class="view on" id="v-auto">
+        <div id="autoBanners"></div>
+        <div class="card">
+          <div class="hero">
+            <div class="hero-dot" id="heroDot"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></div>
+            <div class="hero-txt">
+              <h2 id="heroT">Chargement…</h2>
+              <p id="heroS"></p>
+              <ul class="checklist" id="heroCheck" hidden></ul>
+            </div>
+            <div class="hero-act" id="heroAct"></div>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi ka"><div class="lab">Envoyés aujourd'hui</div><div class="val num" id="kToday">0</div><div class="meter"><i id="kTodayBar" style="width:0"></i></div><div class="foot" id="kTodayF"></div></div>
+          <div class="kpi kd"><div class="lab">Entreprises en réserve</div><div class="val num" id="kQueue">0</div><div class="foot" id="kQueueF"></div></div>
+          <div class="kpi kb"><div class="lab">Envoyés au total</div><div class="val num" id="kSent">0</div><div class="foot" id="kSentF"></div></div>
+          <div class="kpi kc"><div class="lab">Exclus</div><div class="val num" id="kSupp">0</div><div class="foot">désinscrits, rebonds, déjà contactés</div></div>
+          <div class="kpi ke"><div class="lab">Échecs</div><div class="val num" id="kFail">0</div><div class="foot">adresses refusées ou erreurs</div></div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="card-h"><h2>Envois des 14 derniers jours</h2></div>
+            <div class="card-b"><div class="days" id="chDays"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><h2>Recherche d'entreprises et d'adresses</h2><span class="st" id="apStatus"><i></i><span>—</span></span>
+              <div class="right"><button type="button" class="b b-out b-sm" id="bApRun">Chercher maintenant</button></div></div>
+            <div class="card-b">
+              <p class="note" id="apTarget"></p>
+              <div class="meter" style="margin:12px 0 5px"><i id="apBar" style="width:0"></i></div>
+              <p class="note" id="apProgress"></p>
+              <p class="note" id="apReport" style="margin-top:9px"></p>
+              <p class="note" id="apScanned" style="margin-top:9px"></p>
+              <p style="margin-top:12px"><button type="button" class="b b-out b-xs" data-go="target">Modifier le ciblage</button></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="card-h"><h2>Derniers envois</h2><div class="right"><button type="button" class="b b-out b-xs" data-go="log">Tout voir</button></div></div>
+            <div class="card-b" style="padding-top:6px;padding-bottom:6px"><ul class="list" id="recent"></ul></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><h2>Cadence</h2><div class="right"><button type="button" class="b b-out b-xs" data-go="settings">Modifier</button></div></div>
+            <div class="card-b"><div id="cadence" class="note"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== CIBLAGE ==================== -->
+      <section class="view" id="v-target">
+        <form class="card" id="targetForm" style="max-width:1080px">
+          <div class="fset">
+            <div class="fset-h"><h3>Zone</h3><span class="sub">numéros de départements séparés par des virgules — vide = toute la France</span></div>
+            <input class="inp" id="deps" placeholder="ex. 85, 44, 49, 79, 17" style="max-width:420px" autocomplete="off">
+          </div>
+          <div class="fset">
+            <div class="fset-h">
+              <h3>Secteurs d'activité</h3><span class="sub">sections de la nomenclature NAF — base SIRENE de l'INSEE, toutes les entreprises actives</span><span class="spacer"></span>
+              <button type="button" class="b b-out b-xs" id="bSectAll">Tout sélectionner</button>
+              <button type="button" class="b b-out b-xs" id="bSectPro">Entreprises privées</button>
+            </div>
+            <div class="chips" id="sectChips"></div>
+          </div>
+          <div class="fset">
+            <div class="fset-h"><h3>Activités précises</h3><span class="sub">optionnel — remplace les secteurs ci-dessus : divisions (« 56 » = restauration) ou codes NAF complets (« 62.01Z »), séparés par des virgules</span></div>
+            <input class="inp" id="nafs" placeholder="ex. 25, 46, 56.10A, 71.12B" style="max-width:520px" autocomplete="off">
+            <p class="note" style="margin-top:8px" id="nafNote"></p>
+          </div>
+          <div class="fset">
+            <div class="fset-h"><h3>Effectif salarié</h3><span class="sub">tranches INSEE — près d'une entreprise sur trois n'a pas d'effectif renseigné</span></div>
+            <div class="chips">
+              <label class="chip"><input type="checkbox" name="eff" value="NN"> Non renseigné</label>
+              <label class="chip"><input type="checkbox" name="eff" value="00"> 0 salarié</label>
+              <label class="chip"><input type="checkbox" name="eff" value="01"> 1 à 2</label>
+              <label class="chip"><input type="checkbox" name="eff" value="02"> 3 à 5</label>
+              <label class="chip"><input type="checkbox" name="eff" value="03"> 6 à 9</label>
+              <label class="chip"><input type="checkbox" name="eff" value="11"> 10 à 19</label>
+              <label class="chip"><input type="checkbox" name="eff" value="12"> 20 à 49</label>
+              <label class="chip"><input type="checkbox" name="eff" value="21"> 50 à 99</label>
+              <label class="chip"><input type="checkbox" name="eff" value="22"> 100 à 199</label>
+              <label class="chip"><input type="checkbox" name="eff" value="31,32"> 200 à 499</label>
+              <label class="chip"><input type="checkbox" name="eff" value="41,42,51,52,53"> 500 et +</label>
+            </div>
+          </div>
+          <div class="fset">
+            <div class="fset-h"><h3>Découverte des adresses e-mail</h3><span class="sub">la base SIRENE ne publie aucune coordonnée : l'adresse est lue sur le site internet de chaque entreprise</span></div>
+            <label class="swi"><input type="checkbox" id="tGuess" checked><i></i> Deviner le site depuis le nom de l'entreprise (dupont-mecanique.fr…) — gratuit, sans clé</label>
+            <label class="swi" style="margin-top:10px"><input type="checkbox" id="tSearch" checked><i></i> Chercher le site avec un moteur de recherche (API Brave Search, clé côté serveur)</label>
+            <p class="note" style="margin-top:10px" id="searchNote"></p>
+            <p class="note" style="margin-top:10px">Un site n'est retenu que s'il porte le SIREN ou le SIRET de l'entreprise (mentions légales) ou son nom avec sa ville. L'adresse vient de la page d'accueil, de la page contact ou des mentions légales : celle du dirigeant d'abord, sinon une adresse de contact, sur le domaine de l'entreprise de préférence. Les adresses techniques (noreply, dpo, recrutement…) sont ignorées. Comptez environ une adresse pour quatre à six entreprises de plus de 10 salariés, moins pour les très petites.</p>
+          </div>
+          <div class="fset">
+            <div class="fset-h"><h3>Profil minimum</h3><span class="sub">score Yontech calculé sur l'effectif, les établissements, le chiffre d'affaires, la croissance, l'ancienneté et la présence web</span></div>
+            <div class="seg">
+              <label><input type="radio" name="minscore" value="0" checked> Toutes les entreprises</label>
+              <label><input type="radio" name="minscore" value="40"> Bons profils (40 et +)</label>
+              <label><input type="radio" name="minscore" value="65"> Prioritaires (65 et +)</label>
+            </div>
+          </div>
+          <div class="fset">
+            <div class="fset-h"><h3>Personnalisation</h3></div>
+            <label class="swi"><input type="checkbox" id="tReqFirst"><i></i> Contacter uniquement les entreprises dont le prénom du dirigeant est connu, pour toujours écrire « Bonjour Prénom » (réduit le volume d'environ un tiers)</label>
+          </div>
+          <div class="run">
+            <button type="submit" class="b b-main" id="bTargetSave">Enregistrer le ciblage</button>
+            <button type="button" class="b b-out" id="bTargetMax" title="Toutes les entreprises privées, à partir de 6 salariés, toute la France, toutes les méthodes de découverte">Volume maximum</button>
+            <span class="note" id="targetEstimate"></span>
+          </div>
+        </form>
+        <p class="note" style="max-width:80ch;margin-top:14px">L'automate parcourt ces entreprises département par département et taille par taille, à tour de rôle, jour et nuit, et en garde toujours une réserve d'avance. Chacune ne reçoit qu'un seul message. Quand vous changez le ciblage, les entreprises en réserve qui n'ont pas encore été contactées sont remplacées par celles du nouveau ciblage.</p>
+      </section>
+
+      <!-- ==================== MESSAGES ==================== -->
+      <section class="view" id="v-tpl">
+        <div class="tpl-wrap">
+          <div>
+            <div id="tplList"></div>
+            <button type="button" class="b b-out" id="bTplNew" style="width:100%;justify-content:center">+ Nouveau modèle</button>
+            <p class="note" style="margin-top:14px">Si plusieurs modèles sont actifs, l'automate en tire un au hasard pour chaque envoi. Cela évite que tous les messages soient identiques.</p>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-h"><h2 id="tplTitle">Modèle</h2>
+                <div class="right"><label class="swi"><input type="checkbox" id="tActive"><i></i> Actif</label></div></div>
+              <div class="card-b">
+                <div class="fields tpl-fields">
+                  <div class="fld"><label for="tName">Nom interne</label><input class="inp" id="tName" maxlength="120" placeholder="ex. Application sur-mesure — industrie"></div>
+                  <div class="fld"><label for="tKind">Type</label><select class="inp" id="tKind"><option value="initial">Premier contact</option><option value="relance1">Relance 1</option><option value="relance2">Relance 2 (dernière)</option></select>
+                    <p class="help">Une relance part dans le fil du premier message, en « Re : », aux destinataires qui n'ont pas répondu. Délais et conditions dans Réglages.</p></div>
+                  <div class="fld"><label for="tSubject">Objet</label><input class="inp" id="tSubject" maxlength="200"></div>
+                  <div class="fld full"><label for="tBody">Message</label><textarea class="inp" id="tBody" rows="12" maxlength="8000"></textarea>
+                    <div class="vars" id="varChips"></div>
+                    <p class="help note" style="margin-top:8px">Cliquez une variable pour l'insérer. Écrivez <code class="k">{prenom|Madame, Monsieur}</code> pour prévoir un texte quand l'information manque. La signature, la mention de la source des données et le lien de désinscription sont ajoutés automatiquement.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="run">
+                <button type="button" class="b b-main" id="bTplSave">Enregistrer</button>
+                <button type="button" class="b b-out" id="bTplTest">Envoyer un test</button>
+                <input class="inp" type="email" id="tTestTo" placeholder="à moi (ou une autre adresse)" style="width:260px" title="Laissez vide pour recevoir le test sur votre adresse. Collez ici l'adresse fournie par mail-tester.com, ou un Gmail / Outlook à vous, pour un test de délivrabilité.">
+                <label class="swi" title="Sans la mention [Test] dans l'objet et avec le suivi (pixel et liens), exactement comme un vrai envoi : indispensable pour un test de délivrabilité."><input type="checkbox" id="tTestReal"><i></i> Comme un vrai envoi</label>
+                <button type="button" class="b b-danger" id="bTplDel">Supprimer</button>
+                <span class="note" id="tplMsg"></span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-h"><h2>Aperçu</h2>
+                <div class="right"><select class="inp" id="tplSample" style="min-width:240px"></select></div></div>
+              <div class="card-b"><div class="mail" id="tplPreview"></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ENVOIS ==================== -->
+      <section class="view" id="v-log">
+        <div class="card">
+          <div class="tabs" id="logTabs">
+            <button type="button" class="tab" data-st="all">Tous<span class="pill num" id="tcAll">0</span></button>
+            <button type="button" class="tab on" data-st="queued">En file<span class="pill num" id="tcQueued">0</span></button>
+            <button type="button" class="tab" data-st="sent">Envoyés<span class="pill num" id="tcSent">0</span></button>
+            <button type="button" class="tab" data-st="followups">Relances<span class="pill num" id="tcFollow">0</span></button>
+            <button type="button" class="tab" data-st="failed">Échecs<span class="pill num" id="tcFailed">0</span></button>
+            <button type="button" class="tab" data-st="skipped">Ignorés<span class="pill num" id="tcSkipped">0</span></button>
+          </div>
+          <div class="tbar">
+            <div class="search-in">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input type="search" id="lq" placeholder="Entreprise ou e-mail…">
+            </div>
+            <select class="inp" id="lHow" style="width:auto">
+              <option value="">Découverte : toutes</option>
+              <option value="guess">Site deviné depuis le nom</option>
+              <option value="search">Site trouvé par le moteur de recherche</option>
+            </select>
+            <select class="inp" id="lStage" hidden style="width:auto">
+              <option value="">Relances : toutes</option>
+              <option value="1">Relance 1</option>
+              <option value="2">Relance 2</option>
+              <option value="replied">Ont répondu</option>
+            </select>
+            <select class="inp" id="lTrack" hidden style="width:auto">
+              <option value="">Suivi : tous</option>
+              <option value="opened">Ouverts</option>
+              <option value="unopened">Pas ouverts</option>
+              <option value="clicked">Cliqués</option>
+              <option value="unclicked">Pas cliqués</option>
+              <option value="followed">Relancés</option>
+              <option value="replied">Ont répondu</option>
+              <option value="scanner">Scanner seulement (clics automatiques)</option>
+            </select>
+            <span class="note" id="lCount"></span>
+            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <span class="pill num" id="lTotal" style="font-size:.95rem;padding:6px 12px" title="Nombre de lignes correspondant à l'onglet et aux filtres en cours">0</span>
+              <button type="button" class="b b-out b-sm" id="bLogRetry" hidden disabled>Réessayer</button>
+              <button type="button" class="b b-danger b-sm" id="bLogRemove" disabled>Retirer</button>
+            </div>
+          </div>
+          <div class="tscroll">
+            <table>
+              <thead><tr>
+                <th style="width:34px"><input type="checkbox" class="cbx" id="lAll"></th>
+                <th>Entreprise</th>
+                <th style="width:70px">Score</th>
+                <th style="width:110px">Origine</th>
+                <th style="width:150px" id="lDateH">Ajouté le</th>
+                <th>Statut</th>
+              </tr></thead>
+              <tbody id="lBody"></tbody>
+            </table>
+          </div>
+          <div class="pager"><span id="lPage"></span><button type="button" class="b b-out b-xs" id="lPrev">Précédent</button><button type="button" class="b b-out b-xs" id="lNext">Suivant</button></div>
+        </div>
+      </section>
+
+      <!-- ==================== EXCLUSIONS ==================== -->
+      <section class="view" id="v-supp">
+        <div class="grid2 wide-right" style="margin-top:0">
+          <div class="card">
+            <div class="card-h"><h2>Ajouter des adresses</h2></div>
+            <div class="card-b">
+              <textarea class="inp" id="sAdd" rows="7" placeholder="une adresse par ligne"></textarea>
+              <p class="note" style="margin-top:8px">Ces adresses ne recevront jamais de message, même si elles réapparaissent dans une recherche.</p>
+            </div>
+            <div class="run"><button type="button" class="b b-main" id="bSuppAdd">Exclure</button></div>
+          </div>
+          <div class="card">
+            <div class="tbar">
+              <div class="search-in">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" id="sq" placeholder="Chercher une adresse…">
+              </div>
+              <span class="note" id="sCount"></span>
+            </div>
+            <div class="tscroll">
+              <table>
+                <thead><tr><th>Adresse</th><th style="width:170px">Motif</th><th style="width:110px">Depuis le</th><th style="width:80px"></th></tr></thead>
+                <tbody id="sBody"></tbody>
+              </table>
+            </div>
+            <div class="pager"><span id="sPage"></span><button type="button" class="b b-out b-xs" id="sPrev">Précédent</button><button type="button" class="b b-out b-xs" id="sNext">Suivant</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== RÉGLAGES ==================== -->
+      <section class="view" id="v-settings">
+        <form id="setForm" style="max-width:1080px">
+          <div class="card">
+            <div class="card-h"><h2>Expéditeur</h2><span class="sub">les messages partent de votre boîte Hostinger, comme si vous les écriviez</span></div>
+            <div class="card-b">
+              <div class="fields">
+                <div class="fld"><label for="sName">Nom affiché</label><input class="inp" id="sName" maxlength="80" placeholder="Équipe Yontech"></div>
+                <div class="fld"><label for="sEmail">Adresse d'envoi (Hostinger)</label><input class="inp" type="email" id="sEmail" placeholder="ex. contact@yontech.fr"></div>
+                <div class="fld"><label for="sReply">Adresse de réponse</label><input class="inp" type="email" id="sReply" placeholder="facultatif — par défaut l'adresse d'envoi"></div>
+                <div class="fld full"><label for="sSig">Signature</label><textarea class="inp" id="sSig" rows="4" maxlength="1000" placeholder="Équipe Yontech&#10;Logiciels métier et applications sur-mesure · Vendée&#10;https://yontech.fr"></textarea>
+                  <p class="help">Affichée à côté du logo Yontech ; la première ligne est en gras. Un numéro de téléphone ou un lien ajouté ici devient cliquable.</p></div>
+                <div class="fld full"><label for="sVideo">Vidéo de présentation (lien YouTube)</label><input class="inp" id="sVideo" maxlength="300" placeholder="https://www.youtube.com/watch?v=…">
+                  <p class="help">Insérée dans chaque message sous forme d'image cliquable, à l'emplacement <code class="k">{video}</code> du modèle (sinon après le texte). Laissez vide pour ne pas mettre de vidéo.</p></div>
+                <div class="fld full"><label for="sFooter">Identification de l'expéditeur</label><input class="inp" id="sFooter" maxlength="300">
+                  <p class="help">Affichée en bas de chaque message avec la source des données et le lien de désinscription (obligatoire en prospection B2B).</p></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h2>Relances</h2><span class="sub">deux messages de suite au plus, dans le même fil, puis on n'insiste plus</span></div>
+            <div class="card-b">
+              <div class="fields">
+                <div class="fld full"><label class="swi"><input type="checkbox" id="sFuEnabled"><i></i> Relancer automatiquement les destinataires qui n'ont pas répondu</label>
+                  <p class="help">La relance part en « Re : » sur l'objet du premier message, avec un modèle de type « Relance 1 » puis « Relance 2 » (écran Messages). Elle compte dans le quota du jour et passe avant les nouveaux prospects. L'outil ne lit pas la boîte : quand quelqu'un répond, cliquez « A répondu » sur sa ligne dans Envois pour arrêter ses relances.</p></div>
+                <div class="fld"><label for="sFu1">Relance 1, après</label><div class="unit"><input class="inp" type="number" id="sFu1" min="1" max="90" step="1"><span>jours</span></div></div>
+                <div class="fld"><label for="sFu2">Relance 2, après</label><div class="unit"><input class="inp" type="number" id="sFu2" min="2" max="180" step="1"><span>jours</span></div></div>
+                <div class="fld"><label class="swi"><input type="checkbox" id="sFuOpened"><i></i> Seulement si le premier message a été ouvert</label></div>
+                <div class="fld"><label for="sFuSince">Relancer les messages envoyés depuis le</label><input class="inp" type="date" id="sFuSince">
+                  <p class="help">Par défaut, la date d'activation : les messages envoyés avant ne sont pas relancés. Reculez la date pour relancer l'historique, par petites tranches.</p></div>
+              </div>
+              <p class="note" id="fuNote" style="margin-top:10px"></p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h2>Boîte d'envoi</h2><span class="st" id="smtpSt"><i></i><span>—</span></span></div>
+            <div class="card-b">
+              <p class="note" id="smtpInfo"></p>
+              <p class="note">Si la boîte refuse les envois (mot de passe changé, compte bloqué), l'automate se met en pause et vous envoie une alerte sur l'adresse de réponse, ou à défaut sur l'adresse d'envoi. Quand Hostinger signale un quota atteint, il patiente une heure puis reprend tout seul.</p>
+              <p class="note">Le mot de passe de la boîte n'est jamais stocké dans cet outil ni dans le navigateur : il est enregistré comme secret côté serveur Supabase, sous le nom <code class="k">YONTECH_SMTP_PASSWORD</code> (tableau de bord Supabase → Edge Functions → Secrets, ou <code class="k">./deploy.sh secrets</code>).</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><h2>Cadence</h2><span class="sub">régulier, aux heures de bureau, avec une montée progressive : c'est ce qui préserve la réputation de yontech.fr</span></div>
+            <div class="card-b">
+              <div class="fields">
+                <div class="fld"><label for="sCap">Quota maximum par jour</label><input class="inp" type="number" id="sCap" min="1" max="3000">
+                  <p class="help">Hostinger accepte jusqu'à 3 000 e-mails par jour. Plafond une fois la montée en charge terminée.</p></div>
+                <div class="fld"><label>Montée en charge</label>
+                  <label class="swi" style="margin:4px 0 10px"><input type="checkbox" id="sWarm"><i></i> Augmenter le quota progressivement</label>
+                  <div class="inline">départ <input class="inp" type="number" id="sWarmStart" min="1" max="3000"> + <input class="inp" type="number" id="sWarmStep" min="0" max="1000"> par jour d'envoi</div></div>
+                <div class="fld"><label>Créneau d'envoi (heure de Paris)</label>
+                  <div class="inline">de <input class="inp" type="time" id="sWinStart" style="width:120px"> à <input class="inp" type="time" id="sWinEnd" style="width:120px"></div></div>
+                <div class="fld"><label>Intervalle entre deux messages</label>
+                  <div class="inline">entre <input class="inp" type="number" id="sGapMin" min="5" max="7200"> et <input class="inp" type="number" id="sGapMax" min="5" max="7200"> secondes</div>
+                  <p class="help">Tiré au hasard à chaque envoi. Pour 1 000 messages/jour sur un créneau de 10 h, visez 20 à 45 secondes.</p></div>
+                <div class="fld full"><label>Jours d'envoi</label>
+                  <div class="chips" id="dayChips"></div></div>
+                <div class="fld"><label for="sErr">En cas d'erreurs répétées</label>
+                  <div class="inline">après <input class="inp" type="number" id="sErr" min="1" max="20"> erreurs d'affilée, patienter 30 min</div></div>
+              </div>
+              <p class="note" id="capNote" style="margin-top:16px"></p>
+            </div>
+          </div>
+
+          <div class="card" style="position:sticky;bottom:12px;z-index:5">
+            <div class="run" style="border-top:0;border-radius:var(--r)">
+              <button type="submit" class="b b-main" id="bSetSave">Enregistrer les réglages</button>
+              <span class="note" id="setMsg"></span>
+            </div>
+          </div>
+        </form>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============================ MODALE ============================ -->
+<div class="ov" id="ov">
+  <div class="mod" role="dialog" aria-modal="true" aria-labelledby="mT">
+    <div class="mod-h">
+      <div style="min-width:0"><h2 id="mT"></h2><p class="sub" id="mS"></p></div>
+      <button class="b b-out b-sm x" id="mX">Fermer</button>
+    </div>
+    <div class="mod-b" id="mB"></div>
+    <div class="mod-f" id="mF"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   CONFIGURATION — projet Supabase de l'automate Yontech
+   ============================================================ */
+// Projet Supabase qui héberge l'automate Yontech. Renseigné par
+// « ./deploy.sh configure » (ou à la main) : URL du projet et clé publique anon.
+const SUPABASE_URL = "__SUPABASE_URL__";
+const SUPABASE_ANON = "__SUPABASE_ANON_KEY__";
+const API = SUPABASE_URL + "/functions/v1/yontech-prospection-api";
+const CONFIGURED = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL) && SUPABASE_ANON.length > 40;
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt = n => (n == null ? "—" : Number(n).toLocaleString("fr-FR"));
+function esc(s){ const d = document.createElement("span"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+const dateFr = d => d ? new Date(d).toLocaleDateString("fr-FR", { day:"2-digit", month:"2-digit", year:"numeric" }) : "";
+const timeFr = d => d ? new Date(d).toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" }) : "";
+const dateTimeFr = d => d ? dateFr(d) + " à " + timeFr(d) : "";
+function ago(d){
+  if (!d) return "";
+  const m = Math.round((Date.now() - new Date(d).getTime()) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return "il y a " + m + " min";
+  const h = Math.round(m / 60);
+  return h < 24 ? "il y a " + h + " h" : "le " + dateFr(d);
+}
+
+let toastT = null;
+function toast(m, ms){
+  const t = $("toast");
+  t.textContent = m; t.classList.add("on");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove("on"), ms || 3200);
+}
+function busy(btn, on, label){
+  if (!btn) return;
+  if (on){ btn.dataset.label = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> ' + esc(label || "Patientez…"); }
+  else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
+}
+
+/* ============================================================
+   CONNEXION — compte Supabase Auth autorisé (YONTECH_ADMIN_EMAILS)
+   ============================================================ */
+const sb = window.supabase.createClient(CONFIGURED ? SUPABASE_URL : "https://non-configure.supabase.co", CONFIGURED ? SUPABASE_ANON : "anon", {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: "yontech-prospection-auth" }
+});
+let booted = false;
+
+function showLogin(message, mfa){
+  $("app").hidden = true;
+  $("login").hidden = false;
+  $("loginForm").hidden = !!mfa;
+  $("mfaForm").hidden = !mfa;
+  $("loginErr").textContent = message || "";
+  setTimeout(() => (mfa ? $("lCode") : $("lEmail")).focus(), 30);
+}
+
+// Double authentification non exigée sur cet outil : le mot de passe du
+// compte autorisé suffit. Le formulaire de code est conservé mais dormant.
+async function needsMfa(){
+  return false;
+}
+
+async function enter(){
+  try {
+    await loadState();
+  } catch(e){
+    if (e.code === "forbidden"){ await sb.auth.signOut(); return showLogin(e.message); }
+    if (e.code === "session") return;
+    $("login").hidden = true; $("app").hidden = false;
+    toast(e.message || "Impossible de charger l'automate.");
+  }
+  if (!state) return;
+  $("login").hidden = true;
+  $("app").hidden = false;
+  if (!booted){ booted = true; startPolling(); }
+}
+
+async function boot(){
+  if (!CONFIGURED){
+    showLogin("Outil non configuré : lancez « ./deploy.sh configure » pour relier cette page à votre projet Supabase (voir README).");
+    $("loginForm").hidden = true;
+    return;
+  }
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return showLogin();
+  if (await needsMfa()) return showLogin("", true);
+  enter();
+}
+
+$("loginForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  busy($("lBtn"), true, "Connexion…");
+  $("loginErr").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email: $("lEmail").value.trim(), password: $("lPwd").value });
+  busy($("lBtn"), false);
+  if (error){ $("loginErr").textContent = /invalid/i.test(error.message) ? "Adresse ou mot de passe incorrect." : error.message; return; }
+  $("lPwd").value = "";
+  if (await needsMfa()) return showLogin("", true);
+  enter();
+});
+$("mfaForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  busy($("mBtn"), true, "Vérification…");
+  try {
+    const { data, error } = await sb.auth.mfa.listFactors();
+    if (error) throw error;
+    const factor = (data.totp || []).find(f => f.status === "verified");
+    if (!factor) throw new Error("Aucune application d'authentification n'est associée à ce compte.");
+    const result = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code: $("lCode").value.trim() });
+    if (result.error) throw new Error("Code incorrect ou expiré.");
+    $("lCode").value = "";
+    busy($("mBtn"), false);
+    enter();
+  } catch(e){
+    busy($("mBtn"), false);
+    $("loginErr").textContent = e.message || "Vérification impossible.";
+    $("lCode").select();
+  }
+});
+$("mBack").addEventListener("click", async () => { await sb.auth.signOut(); showLogin(); });
+$("bLogout").addEventListener("click", async () => { await sb.auth.signOut(); state = null; showLogin("Vous êtes déconnecté."); });
+
+async function api(action, payload){
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session){ showLogin("Session expirée, reconnectez-vous."); throw Object.assign(new Error("Session expirée"), { code: "session" }); }
+  let resp;
+  try {
+    resp = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON },
+      body: JSON.stringify({ action, payload: payload || {} })
+    });
+  } catch(e){ throw new Error("Connexion au serveur impossible. Vérifiez votre réseau."); }
+  const data = await resp.json().catch(() => ({}));
+  if (resp.status === 401){ showLogin("Session expirée, reconnectez-vous."); throw Object.assign(new Error("Session expirée"), { code: "session" }); }
+  if (resp.status === 404) throw new Error("Le service d'automate n'est pas encore déployé sur le serveur.");
+  if (!resp.ok) throw Object.assign(new Error(data.error || ("Erreur " + resp.status)), { code: data.code, data });
+  return data;
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+const VIEWS = {
+  auto:     { t:"Automate",   s:"Recherche d'entreprises et envoi des e-mails de prospection, en continu et sans intervention." },
+  target:   { t:"Ciblage",    s:"Les entreprises que l'automate va chercher et contacter." },
+  tpl:      { t:"Messages",   s:"Les modèles d'e-mail personnalisés par l'automate." },
+  log:      { t:"Envois",     s:"File d'attente et historique de tout ce que l'automate a envoyé." },
+  supp:     { t:"Exclusions", s:"Adresses qui ne recevront plus jamais de message." },
+  settings: { t:"Réglages",   s:"Expéditeur, cadence d'envoi et pilote automatique." }
+};
+let current = "auto";
+function showView(v){
+  current = v;
+  document.querySelectorAll(".nav-b").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  document.querySelectorAll(".view").forEach(s => s.classList.toggle("on", s.id === "v-" + v));
+  $("topT").textContent = VIEWS[v].t;
+  $("topS").textContent = VIEWS[v].s;
+  window.scrollTo(0, 0);
+  if (v === "target") fillTarget();
+  if (v === "log") loadLog();
+  if (v === "supp") loadSupp();
+  if (v === "tpl"){ renderTemplates(); loadSamples(); }
+  if (v === "settings") fillSettings();
+  if (v === "auto") loadState().catch(() => {});
+}
+document.querySelectorAll(".nav-b").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
+document.addEventListener("click", ev => {
+  const g = ev.target.closest("[data-go]");
+  if (g){ ev.preventDefault(); showView(g.getAttribute("data-go")); }
+});
+
+/* ============================================================
+   PERSONNALISATION — miroir de supabase/functions/_shared/yontech-core.ts
+   ============================================================ */
+const VARS = ["prenom", "entreprise", "ville", "metier", "site", "video", "bonjour", "nom", "departement", "effectif"];
+const VAR_HELP = { bonjour:"« Bonjour Jean », ou « Bonjour » si le prénom est inconnu", prenom:"prénom du dirigeant", nom:"nom du dirigeant", entreprise:"nom de l'entreprise", ville:"ville du siège", metier:"activité (restauration, commerce de gros, fabrication de produits métalliques…) — écrivez {metier|votre secteur} pour prévoir un repli", site:"site internet de l'entreprise, où l'adresse a été trouvée (dupont-mecanique.fr)", departement:"n° de département", effectif:"tranche d'effectif", video:"emplacement de la vidéo, seul sur sa ligne (vide = pas de vidéo)" };
+const UPPER_WORDS = new Set(["SARL","SAS","SASU","EURL","SA","SNC","SCI","SCOP","EI","EIRL","SC","GIE","SELARL","SCP","SCA","BTP","TP","VRD","CVC","ETS","RH","IT","ERP","CRM"]);
+const SMALL_WORDS = new Set(["de","du","des","la","le","les","et","en","d","l","a","au","aux","sur"]);
+const clean = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max || 200);
+function niceCompany(raw){
+  const base = clean(raw).replace(/\s*\([^)]*\)/g, "").trim();
+  if (!base) return "";
+  if (base !== base.toUpperCase()) return base;
+  return base.toLowerCase().split(" ").map((w, i) => {
+    if (UPPER_WORDS.has(w.toUpperCase().replace(/[^A-Z]/g, ""))) return w.toUpperCase();
+    if (i > 0 && SMALL_WORDS.has(w)) return w;
+    return w.replace(/(^|[-'’])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase());
+  }).join(" ");
+}
+const capitalName = s => clean(s).toLowerCase().replace(/(^|[\s'\-])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase());
+function templateVars(d){
+  d = d || {};
+  const prenom = capitalName(d.prenom).split(" ")[0] || "";
+  return { bonjour: prenom ? "Bonjour " + prenom : "Bonjour", prenom, nom: capitalName(d.nom), entreprise: niceCompany(d.entreprise),
+    ville: capitalName(d.ville), metier: clean(d.metier, 120), departement: clean(d.departement, 4), effectif: clean(d.effectif, 40),
+    site: clean(d.site, 120).replace(/^https?:\/\//i, "").replace(/\/$/, "") };
+}
+function renderTpl(t, v){
+  return String(t || "").replace(/\{([a-z_]+)(?:\|([^{}]*))?\}/gi, (m, name, fb) => {
+    const k = name.toLowerCase();
+    if (!VARS.includes(k)) return m;
+    return v[k] || (fb == null ? "" : fb);
+  });
+}
+// Miroir exact de composeEmail() côté serveur : l'aperçu est le vrai HTML envoyé.
+const LOGO_URL = "https://prospection.yontech.fr/assets/yontech-logo-112.png";
+const ACCENT = "#4F46E5";
+const UNSUB_URL = "https://prospection.yontech.fr/desinscription.html";
+const hesc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[c]));
+const linkify = e => e.replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g, u => '<a href="' + u + '" style="color:' + ACCENT + '">' + u + "</a>");
+const textToHtml = t => String(t || "").replace(/\r\n/g, "\n").trim().split(/\n{2,}/).map(b => '<p style="margin:0 0 14px">' + linkify(hesc(b)).replace(/\n/g, "<br>") + "</p>").join("");
+function youtubeId(url){ const m = String(url || "").match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : ""; }
+function buildEmail(tpl, s, data){
+  s = s || {};
+  const v = templateVars(data);
+  const tidy = x => renderTpl(x, v).replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
+  const parts = String(tpl.body || "").replace(/\r\n/g, "\n").split(/^[ \t]*\{video\}[ \t]*$/m);
+  const before = tidy(parts[0] || ""), after = tidy(parts.slice(1).join("\n"));
+  const url = s.video_url || "", id = youtubeId(url);
+  const thumb = id ? "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg" : "";
+  const video = url ? (thumb ? '<p style="margin:4px 0 6px"><a href="' + hesc(url) + '" style="text-decoration:none"><img src="' + hesc(thumb) + '" width="480" alt="Vidéo : Yontech en 1 minute" style="display:block;width:100%;max-width:480px;height:auto;border:0;border-radius:12px"></a></p>' : "") +
+    '<p style="margin:0 0 16px;font-size:14px"><a href="' + hesc(url) + '" style="color:' + ACCENT + ';font-weight:bold">▶ Yontech en 1 minute</a></p>' : "";
+  const lines = String(s.signature || "").replace(/\r\n/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
+  const sig = lines.length ? '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 0;border-collapse:collapse"><tr>' +
+    '<td style="padding:0 14px 0 0;vertical-align:top"><img src="' + LOGO_URL + '" width="56" height="56" alt="Yontech" style="display:block;border:0;border-radius:12px"></td>' +
+    '<td style="vertical-align:middle;font:14px/1.5 Arial,Helvetica,sans-serif;color:#5b5d72;border-left:3px solid ' + ACCENT + ';padding:2px 0 2px 14px">' +
+    lines.map((l, i) => i === 0 ? '<b style="color:#15161f;font-size:15px">' + hesc(l) + "</b>" : linkify(hesc(l))).join("<br>") + "</td></tr></table>" : "";
+  const company = v.entreprise || "votre entreprise", identity = clean(s.footer_identity, 300);
+  const html = '<div style="font:15px/1.6 Arial,Helvetica,sans-serif;color:#1f2030;max-width:640px">' + textToHtml(before) + video + (after ? textToHtml(after) : "") + sig +
+    '<p style="margin:28px 0 0;padding-top:12px;border-top:1px solid #e5e5ef;font-size:12px;line-height:1.5;color:#8a8ca0">Vous recevez ce message car ' + hesc(company) +
+    " figure dans le répertoire public des entreprises (base SIRENE de l'INSEE) et publie ses coordonnées professionnelles sur son site internet. " +
+    '<a href="' + UNSUB_URL + '" style="color:#8a8ca0">Ne plus recevoir de message</a>.' + (identity ? "<br>" + hesc(identity) : "") + "</p></div>";
+  return { subject: clean(renderTpl(tpl.subject, v), 200), html };
+}
+function mailHtml(tpl, s, data, to){
+  const mail = buildEmail(tpl, s, data);
+  const from = s && s.sender_email ? (s.sender_name || "Yontech") + " <" + s.sender_email + ">" : "adresse d'envoi à renseigner";
+  return '<div class="mail-h"><div><span>De : </span>' + esc(from) + "</div><div><span>À : </span>" + esc(to || "contact@entreprise.fr") +
+    '</div><div><span>Objet : </span><b>' + esc(mail.subject || "(objet vide)") + "</b></div></div>" +
+    '<iframe class="mail-frame" sandbox="allow-same-origin" title="Aperçu du message" srcdoc="' + hesc('<!doctype html><html><head><meta charset="utf-8"><base target="_blank"></head><body style="margin:0;padding:18px;background:#fff">' + mail.html + "</body></html>") + '"></iframe>';
+}
+// Le cadre prend la hauteur du message une fois chargé.
+document.addEventListener("load", ev => {
+  const f = ev.target;
+  if (f && f.classList && f.classList.contains("mail-frame")){
+    try { f.style.height = (f.contentDocument.documentElement.scrollHeight + 4) + "px"; } catch(e){}
+    try { f.contentDocument.querySelectorAll("img").forEach(img => img.addEventListener("load", () => { f.style.height = (f.contentDocument.documentElement.scrollHeight + 4) + "px"; })); } catch(e){}
+  }
+}, true);
+
+/* ============================================================
+   ÉTAT DE L'AUTOMATE
+   ============================================================ */
+let state = null;
+const STATUS = {
+  setup:       { t:"À configurer",          c:"warn" },
+  paused:      { t:"En pause",              c:"" },
+  running:     { t:"En marche",             c:"ok" },
+  off_hours:   { t:"Hors créneau",          c:"blue" },
+  off_day:     { t:"Jour sans envoi",       c:"blue" },
+  cap_reached: { t:"Quota du jour atteint", c:"blue" },
+  empty:       { t:"File vide",             c:"warn" }
+};
+const DAY_NAMES = ["", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+const hm = t => String(t || "").slice(0, 5);
+
+async function loadState(){
+  const data = await api("state");
+  state = data;
+  renderState();
+  return data;
+}
+
+function nextOpening(s){
+  const now = new Date();
+  const todayIso = ((now.getDay() + 6) % 7) + 1;
+  const nowHm = now.toTimeString().slice(0, 5);
+  if (s.send_days.includes(todayIso) && nowHm < hm(s.window_start)) return "aujourd'hui à " + hm(s.window_start);
+  for (let i = 1; i <= 7; i++){
+    const d = ((todayIso - 1 + i) % 7) + 1;
+    if (s.send_days.includes(d)) return (i === 1 ? "demain" : DAY_NAMES[d]) + " à " + hm(s.window_start);
+  }
+  return "";
+}
+
+function renderState(){
+  if (!state) return;
+  const s = state.settings, c = state.counts, st = STATUS[state.status] || STATUS.paused;
+  $("whoami").textContent = state.adminEmail || "";
+  $("pillQueue").textContent = fmt(c.queued);
+
+  const top = $("topStatus");
+  top.className = "st" + (st.c ? " st-" + st.c : "");
+  top.querySelector("span").textContent = st.t;
+  const canToggle = state.status !== "setup";
+  $("bTopToggle").hidden = !canToggle;
+  $("bTopToggle").className = "b b-sm " + (s.paused ? "b-ok" : "b-out");
+  $("bTopToggle").textContent = s.paused ? "Démarrer l'automate" : "Mettre en pause";
+
+  // Bannières
+  const banners = [];
+  if (s.paused && s.pause_reason && /automatique/i.test(s.pause_reason))
+    banners.push('<div class="banner err"><div class="grow"><b>' + esc(s.pause_reason) + "</b>" + (s.last_error ? '<div style="margin-top:4px">Dernière erreur : ' + esc(s.last_error) + "</div>" : "") + "</div></div>");
+  $("autoBanners").innerHTML = banners.join("");
+
+  // Bloc principal
+  const dot = $("heroDot");
+  dot.className = "hero-dot" + (st.c ? " " + st.c : "");
+  $("heroT").textContent = st.t;
+  let sub = "";
+  if (state.status === "running") sub = s.next_send_at && new Date(s.next_send_at) > new Date() ? "Prochain envoi vers " + timeFr(s.next_send_at) + ". " + fmt(c.queued) + " message(s) en attente." : "Envoi imminent. " + fmt(c.queued) + " message(s) en attente.";
+  if (state.status === "paused") sub = (s.pause_reason && !/manuellement/i.test(s.pause_reason) ? s.pause_reason + " " : "") + "Aucun message ne part tant que l'automate est en pause.";
+  if (state.status === "off_hours") sub = "Les envois reprennent " + nextOpening(s) + ". " + fmt(c.queued) + " message(s) en attente.";
+  if (state.status === "off_day") sub = "Pas d'envoi aujourd'hui. Reprise " + nextOpening(s) + ".";
+  if (state.status === "cap_reached") sub = "Quota de " + fmt(state.capToday) + " messages atteint. Reprise " + nextOpening(s) + ".";
+  if (state.status === "empty") sub = "La réserve est vide : l'automate cherche de nouvelles entreprises et leurs adresses selon votre ciblage (un passage toutes les deux minutes, jour et nuit).";
+  if (state.status === "setup") sub = "Trois éléments sont nécessaires avant le premier envoi :";
+  $("heroS").textContent = sub;
+
+  const check = $("heroCheck");
+  check.hidden = state.status !== "setup";
+  if (state.status === "setup"){
+    const has = k => !state.missing.includes(k);
+    check.innerHTML =
+      '<li class="' + (has("sender") ? "done" : "") + '"><i>' + (has("sender") ? "✓" : "!") + "</i>Adresse d'envoi Hostinger " + (has("sender") ? "" : '<button type="button" data-go="settings">renseigner</button>') + "</li>" +
+      '<li class="' + (has("smtp") ? "done" : "") + '"><i>' + (has("smtp") ? "✓" : "!") + "</i>Mot de passe de la boîte enregistré côté serveur " + (has("smtp") ? "" : '<button type="button" data-help="smtp">comment faire</button>') + "</li>" +
+      '<li class="' + (has("template") ? "done" : "") + '"><i>' + (has("template") ? "✓" : "!") + "</i>Un modèle de message actif " + (has("template") ? "" : '<button type="button" data-go="tpl">rédiger</button>') + "</li>";
+  }
+  const act = [];
+  if (state.status !== "setup"){
+    act.push(s.paused
+      ? '<button type="button" class="b b-ok" data-run="resume">Démarrer l\'automate</button>'
+      : '<button type="button" class="b b-out" data-run="pause">Mettre en pause</button>');
+  }
+  act.push('<button type="button" class="b b-out" data-go="target">Modifier le ciblage</button>');
+  $("heroAct").innerHTML = act.join("");
+
+  // Indicateurs
+  $("kToday").innerHTML = fmt(state.sentToday) + " <small>/ " + fmt(state.capToday) + "</small>";
+  $("kTodayBar").style.width = Math.min(100, state.capToday ? Math.round(state.sentToday / state.capToday * 100) : 0) + "%";
+  $("kTodayF").textContent = s.warmup_enabled && state.capToday < s.daily_cap ? "montée en charge : quota en hausse chaque jour d'envoi" : "quota du jour";
+  $("kQueue").textContent = fmt(c.queued);
+  const perDayCap = Math.max(1, state.capToday || s.daily_cap);
+  $("kQueueF").textContent = c.queued ? "≈ " + fmt(Math.ceil(c.queued / perDayCap)) + " jour(s) d'envoi d'avance" : "recherche en cours";
+  $("kSent").textContent = fmt(c.sent);
+  const tr = state.tracking || {};
+  $("kSentF").textContent = (state.recent[0] ? "dernier " + ago(state.recent[0].sent_at) : "aucun envoi pour l'instant") +
+    (tr.opened ? " · " + fmt(tr.opened) + " ouvert(s) · " + fmt((tr.video || 0) + (tr.site || 0)) + " clic(s) humain(s)" : "") +
+    (tr.scanner ? " · " + fmt(tr.scanner) + " scannés" : "") +
+    (state.followups && state.followups.sent ? " · " + fmt(state.followups.sent) + " relance(s)" : "") +
+    (state.followups && state.followups.due ? " · " + fmt(state.followups.due) + " à relancer" : "");
+  $("kSupp").textContent = fmt(c.suppressions);
+  $("kFail").textContent = fmt(c.failed);
+  $("tcQueued").textContent = fmt(c.queued); $("tcSent").textContent = fmt(c.sent); $("tcFollow").textContent = fmt((state.followups || {}).sent || 0);
+  $("tcAll").textContent = fmt((c.queued || 0) + (c.sent || 0) + (c.failed || 0) + (c.skipped || 0));
+  $("tcFailed").textContent = fmt(c.failed); $("tcSkipped").textContent = fmt(c.skipped);
+
+  // Tout l'historique, jour par jour (heure de Paris), du premier envoi à aujourd'hui.
+  const keys = Object.keys(state.perDay || {}).sort();
+  const todayKey = new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
+  const days = [];
+  if (keys.length){
+    for (let d = new Date(keys[0] + "T12:00:00"); ; d = new Date(d.getTime() + 864e5)){
+      const key = d.toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
+      const v = state.perDay[key] || { p: 0, r: 0 };
+      days.push({ key, p: v.p || 0, r: v.r || 0, n: (v.p || 0) + (v.r || 0), lab: d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) });
+      if (key >= todayKey || days.length > 400) break;
+    }
+  }
+  const max = Math.max(1, ...days.map(d => d.n));
+  const chTotal = days.reduce((a, d) => a + d.n, 0);
+  $("chDays").style.overflowX = "auto";
+  $("chDays").innerHTML = days.map(d => '<div title="' + esc(d.key) + " : " + d.p + " premier(s) contact(s)" + (d.r ? ", " + d.r + " relance(s)" : "") + '"><b>' + (d.n || "") + '</b><i class="' + (d.n ? "" : "zero") + '" style="height:' + Math.max(2, Math.round(d.n / max * 86)) + 'px"></i><span>' + esc(d.lab) + "</span></div>").join("") ||
+    '<p class="note">Aucun envoi pour l\'instant.</p>';
+  const chTitle = $("chDays").closest(".card") && $("chDays").closest(".card").querySelector(".card-h h2");
+  if (chTitle) chTitle.textContent = "Envois par jour · " + fmt(chTotal) + " au total" + (days.length ? " depuis le " + esc(days[0].lab) : "");
+
+  // Derniers envois
+  $("recent").innerHTML = state.recent.length
+    ? state.recent.map(r => '<li>' + (r.kind === "followup" ? '<span class="badge sent">Relance ' + esc(r.stage) + '</span>' : '<span class="badge sent">Envoyé</span>') + trackBadges(r) + '<div class="grow"><b>' + esc(niceCompany(r.company) || r.email) + "</b><span>" + esc(r.email) + "</span></div><span class=\"note\">" + esc(ago(r.sent_at)) + "</span></li>").join("")
+    : '<li><div class="grow"><span>Aucun message envoyé pour l\'instant.</span></div></li>';
+
+  // Cadence
+  const days2 = s.send_days.map(d => DAY_NAMES[d]).join(", ");
+  $("cadence").innerHTML =
+    "<b>" + fmt(state.capToday) + " messages aujourd'hui</b> au maximum" + (s.warmup_enabled && state.capToday < s.daily_cap ? ", jusqu'à " + fmt(s.daily_cap) + " par jour une fois la montée en charge terminée (+" + s.warmup_step + " par jour d'envoi)" : "") + ".<br>" +
+    "Envois " + esc(days2) + ", de " + hm(s.window_start) + " à " + hm(s.window_end) + " (heure de Paris), un message toutes les " + gapLabel(s.min_gap_seconds) + " à " + gapLabel(s.max_gap_seconds) + ".<br>" +
+    "Expéditeur : <b>" + esc(s.sender_email ? (s.sender_name + " <" + s.sender_email + ">") : "à renseigner") + "</b>";
+
+  // Recherche automatique
+  const ap = $("apStatus");
+  ap.className = "st" + (s.paused ? "" : " st-ok");
+  ap.querySelector("span").textContent = s.paused ? "En pause" : "Active";
+  $("apTarget").innerHTML = "<b>Ciblage :</b> " + esc(targetSummary(s.autopilot_target)) + (s.autopilot_min_score ? " · score minimum " + s.autopilot_min_score : "");
+  const rep = s.last_sourcing_report;
+  const total = rep ? Number(rep.total || 0) : 0, done = rep ? Number(rep.done || 0) : 0;
+  $("apBar").style.width = total ? Math.round(done / total * 100) + "%" : "0";
+  $("apProgress").textContent = total ? fmt(done) + " zone(s) de recherche sur " + fmt(total) + " entièrement parcourues (département × taille d'entreprise" + (total > 1200 ? " × secteur" : "") + ")." : "Le parcours démarrera au premier passage.";
+  $("apReport").innerHTML = rep
+    ? "<b>Dernier passage " + esc(ago(rep.at)) + " :</b> " + fmt(rep.scanned) + " entreprise(s) lue(s) dans SIRENE, " + fmt(rep.sites) + " site(s) vérifié(s), " + fmt(rep.withEmail) + " adresse(s) trouvée(s), " + fmt(rep.added) + " ajoutée(s) à la file" + (rep.known ? ", " + fmt(rep.known) + " déjà connue(s)" : "") + (rep.noFirstName ? ", " + fmt(rep.noFirstName) + " sans prénom" : "") + (rep.lowScore ? ", " + fmt(rep.lowScore) + " sous le score minimum" : "") + (rep.searches ? ", " + fmt(rep.searches) + " recherche(s) web" : "") + "."
+      + (rep.searchBlocked ? " <b>Le moteur de recherche a refusé des requêtes (quota) :</b> seuls les domaines devinés ont été essayés." : "")
+      + (rep.exhausted ? " <b>Toutes les entreprises du ciblage ont été parcourues</b> : élargissez-le pour continuer." : "")
+    : "Aucun passage pour l'instant : le premier aura lieu dès que l'automate sera démarré.";
+  const sc = state.scanned || {};
+  $("apScanned").innerHTML = sc.total
+    ? "<b>Depuis le début :</b> " + fmt(sc.total) + " entreprises examinées, " + fmt(sc.sites) + " sites vérifiés, " + fmt(sc.emails) + " adresses trouvées (" + (sc.total ? Math.round(sc.emails / sc.total * 100) : 0) + " %)" + (sc.today ? " · aujourd'hui : " + fmt(sc.emails_today) + " adresse(s) sur " + fmt(sc.today) + " entreprise(s)" : "") + "."
+    : "";
+}
+
+async function runAction(kind, btn){
+  busy(btn, true, kind === "resume" ? "Démarrage…" : "Pause…");
+  try {
+    await api(kind === "resume" ? "run.resume" : "run.pause");
+    toast(kind === "resume" ? "Automate démarré : les envois partiront dans le créneau prévu." : "Automate en pause.");
+  } catch(e){ toast(e.message, 6000); }
+  busy(btn, false);
+  await loadState().catch(() => {});
+}
+document.addEventListener("click", ev => {
+  const r = ev.target.closest("[data-run]");
+  if (r) runAction(r.getAttribute("data-run"), r);
+  const h = ev.target.closest("[data-help]");
+  if (h) openHelp(h.getAttribute("data-help"));
+});
+$("bTopToggle").addEventListener("click", ev => runAction(state && state.settings.paused ? "resume" : "pause", ev.currentTarget));
+
+$("bApRun").addEventListener("click", async ev => {
+  const btn = ev.currentTarget;
+  busy(btn, true, "Recherche en cours…");
+  try {
+    const { result } = await api("autopilot.run");
+    const r = result.report || {};
+    toast(fmt(r.added || 0) + " adresse(s) ajoutée(s) à la réserve sur " + fmt(r.scanned || 0) + " entreprise(s) examinée(s). La recherche continue en tâche de fond.", 6000);
+    await loadState();
+  } catch(e){ toast(e.message, 5000); }
+  busy(btn, false);
+});
+
+let pollT = null;
+function startPolling(){
+  clearInterval(pollT);
+  pollT = setInterval(() => {
+    if (document.hidden || !state || current !== "auto") return;
+    loadState().catch(() => {});
+  }, 30000);
+}
+
+/* ============================================================
+   CIBLAGE — enregistré côté serveur, utilisé par la recherche automatique
+   ============================================================ */
+const API_SIRENE = "https://recherche-entreprises.api.gouv.fr/search";
+const EFF = { "00":"0 salarié","01":"1 à 2","02":"3 à 5","03":"6 à 9","11":"10 à 19","12":"20 à 49",
+  "21":"50 à 99","22":"100 à 199","31":"200 à 249","32":"250 à 499","41":"500 à 999",
+  "42":"1 000 à 1 999","51":"2 000 à 4 999","52":"5 000 à 9 999","53":"10 000 et +" };
+const DEPS = (() => {
+  const l = [];
+  for (let i = 1; i <= 19; i++) l.push(String(i).padStart(2, "0"));
+  l.push("2A", "2B");
+  for (let i = 21; i <= 95; i++) l.push(String(i).padStart(2, "0"));
+  return l.concat(["971", "972", "973", "974", "976"]);
+})();
+// Sections NAF (miroir de yontech-core.ts). `pro` = entreprises privées à
+// prospecter ; O, T et U (administrations, particuliers employeurs, organismes
+// extraterritoriaux) en sont exclues.
+const SECTIONS = [
+  ["A","Agriculture, sylviculture, pêche"],["B","Industries extractives"],["C","Industrie manufacturière"],["D","Énergie"],
+  ["E","Eau, déchets, dépollution"],["F","Construction"],["G","Commerce, réparation automobile"],["H","Transports, entreposage"],
+  ["I","Hébergement, restauration"],["J","Information, communication"],["K","Finance, assurance"],["L","Immobilier"],
+  ["M","Activités spécialisées, scientifiques, techniques"],["N","Services administratifs et de soutien"],["O","Administration publique"],
+  ["P","Enseignement"],["Q","Santé, action sociale"],["R","Arts, spectacles, loisirs"],["S","Autres services"],["T","Ménages employeurs"],["U","Activités extraterritoriales"]
+];
+const SECT_NAME = Object.fromEntries(SECTIONS);
+const PRO_SECTIONS = SECTIONS.map(s => s[0]).filter(s => !["O","T","U"].includes(s));
+const DEFAULT_EFFS = ["03", "11", "12", "21", "22", "31", "32"];
+const NAF_DIVISION = { "01":"agriculture","10":"industrie alimentaire","13":"textile","16":"travail du bois","18":"imprimerie","22":"plasturgie","25":"produits métalliques","28":"machines","31":"meubles","33":"réparation de machines","41":"construction de bâtiments","43":"travaux spécialisés","45":"commerce automobile","46":"commerce de gros","47":"commerce de détail","49":"transport terrestre","52":"logistique","55":"hébergement","56":"restauration","62":"services informatiques","68":"immobilier","69":"juridique et comptable","70":"conseil","71":"architecture et ingénierie","73":"publicité","78":"intérim","80":"sécurité","81":"nettoyage","82":"services aux entreprises","85":"enseignement","86":"santé","93":"sport et loisirs","96":"services personnels" };
+
+$("sectChips").innerHTML = SECTIONS.map(([c, n]) =>
+  '<label class="chip" title="Section ' + c + '"><input type="checkbox" name="secteur" value="' + c + '"' + (PRO_SECTIONS.includes(c) ? ' data-pro="1"' : "") + "> " + esc(c + " · " + n) + "</label>"
+).join("");
+
+function parseNafs(text){
+  const list = String(text || "").toUpperCase().split(/[\s,;]+/).map(d => d.trim()).filter(Boolean);
+  const bad = list.filter(d => !/^(\d{2}|\d{2}\.\d{2}[A-Z])$/.test(d));
+  if (bad.length) throw new Error("Code NAF inconnu : " + bad.join(", ") + " (attendu : « 56 » ou « 56.10A »).");
+  return [...new Set(list)];
+}
+function nafNote(){
+  let list;
+  try { list = parseNafs($("nafs").value); } catch(e){ $("nafNote").textContent = e.message; return; }
+  $("nafNote").textContent = list.length
+    ? "Activités retenues : " + list.map(c => c.length === 2 ? c + " (" + (NAF_DIVISION[c] || "division " + c) + ")" : c).join(", ") + ". Les secteurs ci-dessus sont ignorés."
+    : "";
+}
+function targetSummary(t){
+  t = t || {};
+  const sect = t.sect && t.sect.length ? t.sect : PRO_SECTIONS;
+  const what = t.nafs && t.nafs.length
+    ? (t.nafs.length > 4 ? t.nafs.length + " activités (" + t.nafs.slice(0, 3).join(", ") + "…)" : t.nafs.map(c => c.length === 2 && NAF_DIVISION[c] ? NAF_DIVISION[c] : c).join(", "))
+    : (sect.length >= PRO_SECTIONS.length ? "toutes les entreprises privées" : sect.length > 4 ? sect.length + " secteurs" : sect.map(s => SECT_NAME[s] || s).join(", "));
+  const effs = (t.effs && t.effs.length ? t.effs : DEFAULT_EFFS).map(e => EFF[e]).filter(Boolean);
+  const effTxt = effs.length ? "effectif " + effs[0].split(" à ")[0] + " à " + (effs[effs.length - 1].split(" à ")[1] || effs[effs.length - 1]) + " salariés" : "tous effectifs";
+  const zone = t.deps && t.deps.length ? "départements " + t.deps.join(", ") : "toute la France";
+  const how = [t.guess !== false ? "site deviné" : "", t.search !== false ? "moteur de recherche" : ""].filter(Boolean).join(" + ") || "aucune découverte";
+  return what + " · " + effTxt + " · " + zone + " · " + how;
+}
+function parseDeps(text){
+  const list = String(text || "").toUpperCase().split(/[\s,;]+/).map(d => d.trim()).filter(Boolean).map(d => /^\d$/.test(d) ? "0" + d : d);
+  const bad = list.filter(d => !DEPS.includes(d));
+  if (bad.length) throw new Error("Département inconnu : " + bad.join(", ") + ".");
+  return [...new Set(list)];
+}
+const sectBoxes = () => [...document.querySelectorAll("input[name=secteur]")];
+$("bSectAll").addEventListener("click", () => {
+  const all = sectBoxes().every(c => c.checked);
+  sectBoxes().forEach(c => { c.checked = !all; });
+  $("bSectAll").textContent = all ? "Tout sélectionner" : "Tout désélectionner";
+  targetChanged();
+});
+$("bSectPro").addEventListener("click", () => {
+  sectBoxes().forEach(c => { c.checked = c.dataset.pro === "1"; });
+  $("bSectAll").textContent = "Tout sélectionner";
+  targetChanged();
+});
+function searchNote(){
+  const configured = state && state.search && state.search.configured;
+  $("searchNote").innerHTML = $("tSearch").checked
+    ? (configured ? "<b>Clé configurée.</b> Le moteur n'est interrogé que pour les entreprises dont aucun domaine deviné n'a été vérifié (une requête par entreprise)."
+                  : "<b>Aucune clé côté serveur :</b> cette méthode restera inactive tant que le secret <code class=\"k\">YONTECH_SEARCH_API_KEY</code> (API Brave Search, gratuite jusqu'à 2 000 requêtes par mois) n'est pas enregistré. Les domaines devinés fonctionnent sans.")
+    : "Seuls les domaines devinés depuis le nom seront essayés.";
+}
+
+function readTarget(){
+  const sect = sectBoxes().filter(c => c.checked).map(c => c.value);
+  const nafs = parseNafs($("nafs").value);
+  if (!sect.length && !nafs.length) throw new Error("Sélectionnez au moins un secteur ou une activité précise.");
+  const effs = [...document.querySelectorAll("input[name=eff]:checked")].flatMap(c => c.value.split(","));
+  if (!effs.length) throw new Error("Sélectionnez au moins une tranche d'effectif.");
+  if (!$("tGuess").checked && !$("tSearch").checked) throw new Error("Activez au moins une méthode de découverte des adresses.");
+  return {
+    target: { sect, nafs, effs, deps: parseDeps($("deps").value), guess: $("tGuess").checked, search: $("tSearch").checked },
+    minScore: Number(document.querySelector("input[name=minscore]:checked").value),
+    requireFirstName: $("tReqFirst").checked
+  };
+}
+let targetDirty = false;
+function fillTarget(){
+  if (!state || targetDirty) return;
+  const t = state.settings.autopilot_target || {};
+  const sect = t.sect && t.sect.length ? t.sect : (t.nafs && t.nafs.length ? [] : PRO_SECTIONS);
+  sectBoxes().forEach(c => { c.checked = sect.includes(c.value); });
+  $("nafs").value = (t.nafs || []).join(", ");
+  const effs = t.effs && t.effs.length ? t.effs : DEFAULT_EFFS;
+  document.querySelectorAll("input[name=eff]").forEach(c => { c.checked = c.value.split(",").some(code => effs.includes(code)); });
+  $("deps").value = (t.deps || []).join(", ");
+  $("tGuess").checked = t.guess !== false;
+  $("tSearch").checked = t.search !== false;
+  $("tReqFirst").checked = state.settings.require_first_name === true;
+  const score = Number(state.settings.autopilot_min_score || 0);
+  const scoreValue = score >= 65 ? "65" : score >= 40 ? "40" : "0";
+  document.querySelectorAll("input[name=minscore]").forEach(r => { r.checked = r.value === scoreValue; });
+  nafNote(); searchNote();
+  estimate();
+}
+
+// Estimation du stock : une requête par département (per_page=1), juste
+// pour lire le total. L'API plafonne chaque réponse à 10 000.
+let estimateT = null, estimateRun = 0;
+function targetChanged(){ targetDirty = true; nafNote(); searchNote(); clearTimeout(estimateT); estimateT = setTimeout(estimate, 600); }
+async function estimate(){
+  const run = ++estimateRun;
+  let t;
+  try { t = readTarget().target; } catch(e){ $("targetEstimate").textContent = e.message; return; }
+  const base = {};
+  if (t.nafs.length){
+    // Une division (« 56 ») est approximée par sa section pour l'estimation.
+    const full = t.nafs.filter(n => n.length === 6);
+    if (full.length && full.length === t.nafs.length) base.activite_principale = full.join(",");
+    else base.section_activite_principale = [...new Set(t.nafs.map(n => sectionOfDivision(n.slice(0, 2))))].filter(Boolean).join(",");
+  } else base.section_activite_principale = t.sect.join(",");
+  base.tranche_effectif_salarie = t.effs.join(",");
+  base.etat_administratif = "A";
+  const zones = t.deps.length ? t.deps : DEPS;
+  let total = 0, capped = false, done = 0, failed = false;
+  const queue = zones.slice();
+  $("targetEstimate").textContent = "Estimation du nombre d'entreprises…";
+  async function worker(){
+    while (queue.length && run === estimateRun){
+      const dep = queue.shift();
+      try {
+        const r = await fetch(API_SIRENE + "?" + new URLSearchParams(Object.assign({}, base, { departement: dep, per_page: "1", page: "1" })).toString());
+        if (r.status === 429){ queue.push(dep); await sleep(1500); continue; }
+        if (!r.ok) throw new Error();
+        const n = Number((await r.json()).total_results || 0);
+        total += n; if (n >= 10000) capped = true;
+      } catch(e){ failed = true; }
+      done++;
+      if (run === estimateRun && zones.length > 3) $("targetEstimate").textContent = "Estimation… " + done + " / " + zones.length + " départements";
+      await sleep(250);
+    }
+  }
+  await Promise.all([worker(), worker(), worker()]);
+  if (run !== estimateRun) return;
+  if (failed && !total){ $("targetEstimate").textContent = ""; return; }
+  const perDay = state ? Math.max(1, state.settings.daily_cap) : 200;
+  const emails = Math.round(total / 5);
+  $("targetEstimate").innerHTML = (capped ? "Au moins " : "≈ ") + "<b>" + fmt(total) + "</b> entreprises correspondent" + (t.nafs.some(n => n.length === 2) ? " (sections entières : la sélection par division sera plus restreinte)" : "") +
+    ", soit environ <b>" + fmt(emails) + "</b> adresses à trouver (une entreprise sur cinq publie une adresse exploitable), ≈ " + fmt(Math.ceil(emails / perDay)) + " jours d'envoi au quota maximum.";
+}
+function sectionOfDivision(d){
+  const n = Number(d);
+  if (n <= 3) return "A"; if (n <= 9) return "B"; if (n <= 33) return "C"; if (n === 35) return "D"; if (n <= 39) return "E";
+  if (n <= 43) return "F"; if (n <= 47) return "G"; if (n <= 53) return "H"; if (n <= 56) return "I"; if (n <= 63) return "J";
+  if (n <= 66) return "K"; if (n === 68) return "L"; if (n <= 75) return "M"; if (n <= 82) return "N"; if (n === 84) return "O";
+  if (n === 85) return "P"; if (n <= 88) return "Q"; if (n <= 93) return "R"; if (n <= 96) return "S"; if (n <= 98) return "T"; return "U";
+}
+$("bTargetMax").addEventListener("click", () => {
+  sectBoxes().forEach(c => { c.checked = c.dataset.pro === "1"; });
+  $("nafs").value = "";
+  document.querySelectorAll("input[name=eff]").forEach(c => { c.checked = !c.value.split(",").some(v => ["NN", "00", "01", "02"].includes(v)); });
+  document.querySelectorAll("input[name=minscore]").forEach(r => { r.checked = r.value === "0"; });
+  $("tGuess").checked = true; $("tSearch").checked = true; $("tReqFirst").checked = false;
+  $("deps").value = "";
+  targetChanged();
+  toast("Volume maximum : toutes les entreprises privées à partir de 6 salariés, toute la France, toutes les méthodes de découverte. Pensez à enregistrer.", 6000);
+});
+$("targetForm").addEventListener("input", targetChanged);
+$("targetForm").addEventListener("change", targetChanged);
+$("targetForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  let t;
+  try { t = readTarget(); } catch(e){ return toast(e.message, 5000); }
+  const btn = $("bTargetSave");
+  busy(btn, true, "Enregistrement…");
+  try {
+    const { settings, replaced } = await api("settings.save", { autopilot_target: t.target, autopilot_min_score: t.minScore, require_first_name: t.requireFirstName });
+    state.settings = settings;
+    targetDirty = false;
+    await loadState();
+    toast("Ciblage enregistré" + (replaced ? " : " + fmt(replaced) + " entreprise(s) en réserve remplacée(s) par le nouveau ciblage." : "."), 5000);
+  } catch(e){ toast(e.message, 6000); }
+  busy(btn, false);
+});
+
+/* ============================================================
+   MODALE
+   ============================================================ */
+function openModal(title, sub, body, foot){
+  $("mT").textContent = title; $("mS").textContent = sub || "";
+  $("mB").innerHTML = body; $("mF").innerHTML = foot || "";
+  $("mF").hidden = !foot;
+  $("ov").classList.add("on");
+}
+function closeModal(){ $("ov").classList.remove("on"); }
+$("mX").addEventListener("click", closeModal);
+$("ov").addEventListener("click", ev => { if (ev.target === $("ov")) closeModal(); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeModal(); });
+
+/* ============================================================
+   MESSAGES (modèles)
+   ============================================================ */
+let tplId = null, lastField = "tBody";
+const SAMPLE = { entreprise: "DUPONT MECANIQUE", prenom: "Jean", nom: "Dupont", ville: "La Roche-sur-Yon", cp: "85000", metier: "fabrication de produits métalliques", departement: "85", effectif: "20 à 49", site: "dupont-mecanique.fr" };
+
+$("varChips").innerHTML = VARS.map(v => '<button type="button" data-var="' + v + '" title="' + esc(VAR_HELP[v]) + '">{' + v + "}</button>").join("");
+["tSubject", "tBody"].forEach(id => $(id).addEventListener("focus", () => { lastField = id; }));
+$("varChips").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-var]");
+  if (!b) return;
+  const field = $(lastField), token = "{" + b.getAttribute("data-var") + "}";
+  const start = field.selectionStart ?? field.value.length, end = field.selectionEnd ?? field.value.length;
+  field.value = field.value.slice(0, start) + token + field.value.slice(end);
+  field.focus();
+  field.selectionStart = field.selectionEnd = start + token.length;
+  renderPreview();
+});
+
+function renderTemplates(){
+  if (!state) return;
+  const list = state.templates;
+  if (tplId && !list.some(t => t.id === tplId)) tplId = null;
+  if (tplId === null && list.length && !$("tName").dataset.dirty) tplId = list[0].id;
+  $("tplList").innerHTML = list.map(t =>
+    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + "</b><span>" + esc(KIND[t.kind] ? "Re : objet du premier message" : t.subject) + "</span></button>"
+  ).join("") || '<p class="note" style="margin-bottom:10px">Aucun modèle pour l\'instant.</p>';
+  // Une modification en cours n'est jamais écrasée par un rafraîchissement.
+  if (!$("tName").dataset.dirty) fillTemplate(list.find(x => x.id === tplId) || { name: "", subject: "", body: "", active: true });
+  renderSampleOptions();
+  renderPreview();
+}
+let samples = [];
+function renderSampleOptions(){
+  const keep = $("tplSample").value;
+  $("tplSample").innerHTML = ['<option value="">Exemple fictif (Dupont Mécanique)</option>']
+    .concat(samples.map((m, i) => '<option value="' + i + '">' + esc(niceCompany(m.company) || m.email) + (m.data && m.data.ville ? " — " + esc(m.data.ville) : "") + "</option>")).join("");
+  if (keep && samples[Number(keep)]) $("tplSample").value = keep;
+}
+async function loadSamples(){
+  try {
+    const data = await api("queue.list", { status: "queued", page: 1 });
+    samples = data.items.slice(0, 25);
+    renderSampleOptions();
+  } catch(e){}
+}
+const KIND = { relance1: "relance 1", relance2: "relance 2" };
+// Une relance part toujours en « Re : » sur l'objet du premier message : son objet propre ne sert pas.
+function syncKind(){
+  const relance = $("tKind").value !== "initial";
+  $("tSubject").disabled = relance;
+  if (relance) $("tSubject").value = "Re : (objet du premier message)";
+}
+function fillTemplate(t){
+  $("tplTitle").textContent = t.id ? "Modifier le modèle" : "Nouveau modèle";
+  $("tName").value = t.name || ""; $("tSubject").value = t.subject || ""; $("tBody").value = t.body || "";
+  $("tActive").checked = t.active !== false;
+  $("tKind").value = t.kind || "initial"; syncKind();
+  $("bTplDel").hidden = !t.id;
+  $("tplMsg").textContent = "";
+  delete $("tName").dataset.dirty;
+}
+function sampleMessage(){ const v = $("tplSample").value; return v !== "" ? samples[Number(v)] : null; }
+function sampleData(){ const m = sampleMessage(); return m ? (m.data || {}) : SAMPLE; }
+function renderPreview(){
+  const tpl = { subject: $("tSubject").value, body: $("tBody").value };
+  const m = sampleMessage();
+  $("tplPreview").innerHTML = mailHtml(tpl, state && state.settings, sampleData(), m ? m.email : "contact@dupont-mecanique.fr");
+}
+["tName", "tSubject", "tBody"].forEach(id => $(id).addEventListener("input", () => { $("tName").dataset.dirty = "1"; renderPreview(); }));
+$("tKind").addEventListener("change", () => { $("tName").dataset.dirty = "1"; syncKind(); renderPreview(); });
+$("tplSample").addEventListener("change", renderPreview);
+$("tplList").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-tpl]");
+  if (!b) return;
+  tplId = b.getAttribute("data-tpl");
+  delete $("tName").dataset.dirty;
+  renderTemplates();
+});
+$("bTplNew").addEventListener("click", () => {
+  tplId = "";
+  document.querySelectorAll(".tpl-item").forEach(x => x.classList.remove("on"));
+  fillTemplate({ name: "", subject: "{entreprise} : ", body: "{bonjour},\n\n\n\nRépondez simplement « ok » et nous vous rappelons.\n\nBien cordialement,", active: true, kind: "initial" });
+  $("tName").dataset.dirty = "1";
+  renderPreview();
+  $("tName").focus();
+});
+$("bTplSave").addEventListener("click", async ev => {
+  const btn = ev.currentTarget;
+  busy(btn, true, "Enregistrement…");
+  try {
+    const { template } = await api("templates.save", { id: tplId || undefined, name: $("tName").value, subject: $("tSubject").value, body: $("tBody").value, active: $("tActive").checked, kind: $("tKind").value });
+    tplId = template.id;
+    delete $("tName").dataset.dirty;
+    await loadState();
+    renderTemplates();
+    $("tplMsg").textContent = "Modèle enregistré.";
+  } catch(e){ $("tplMsg").textContent = e.message; }
+  busy(btn, false);
+});
+$("tActive").addEventListener("change", () => { $("tName").dataset.dirty = "1"; });
+$("bTplDel").addEventListener("click", async ev => {
+  if (!tplId || !confirm("Supprimer ce modèle ?")) return;
+  const btn = ev.currentTarget;
+  busy(btn, true, "Suppression…");
+  try { await api("templates.delete", { id: tplId }); tplId = null; await loadState(); renderTemplates(); toast("Modèle supprimé."); }
+  catch(e){ toast(e.message, 5000); }
+  busy(btn, false);
+});
+$("bTplTest").addEventListener("click", async ev => {
+  const btn = ev.currentTarget;
+  busy(btn, true, "Envoi du test…");
+  $("tplMsg").textContent = "";
+  try {
+    const { to } = await api("test.send", { template: { subject: $("tSubject").value, body: $("tBody").value }, sample: sampleData(), to: $("tTestTo").value.trim() || undefined, realistic: $("tTestReal").checked });
+    $("tplMsg").textContent = "Test envoyé à " + to + ". Vérifiez aussi le dossier indésirables.";
+  } catch(e){
+    const detail = e.data && e.data.outcome === "fatal" ? " La boîte Hostinger refuse la connexion : vérifiez l'adresse d'envoi et le secret YONTECH_SMTP_PASSWORD côté serveur." : "";
+    $("tplMsg").textContent = "Échec : " + e.message + detail;
+  }
+  busy(btn, false);
+});
+
+/* ============================================================
+   ENVOIS (journal)
+   ============================================================ */
+const LOG = { status: "queued", page: 1, total: 0, items: [], sel: new Set() };
+const ORIGIN = { manuel: "Recherche", autopilote: "Pilote auto" };
+const BADGE = { queued: "En file", sending: "Envoi…", sent: "Envoyé", failed: "Échec", skipped: "Ignoré" };
+function gapLabel(sec){ return sec < 120 ? sec + " seconde(s)" : Math.round(sec / 60) + " minute(s)"; }
+// Badges de suivi d'un message envoyé : ouverture, vidéo vue, lien cliqué.
+function trackBadges(m){
+  const b = [];
+  if (m.opened_at) b.push('<span class="badge open" title="Ouvert le ' + esc(dateTimeFr(m.opened_at)) + '">Ouvert</span>');
+  if (m.video_clicked_at) b.push('<span class="badge video" title="Vidéo ouverte le ' + esc(dateTimeFr(m.video_clicked_at)) + '">▶ Vidéo</span>');
+  if (m.site_clicked_at) b.push('<span class="badge clic" title="Lien cliqué le ' + esc(dateTimeFr(m.site_clicked_at)) + '">Clic</span>');
+  if (m.scanner_at && !m.opened_at && !m.video_clicked_at && !m.site_clicked_at) b.push('<span class="badge unsub" style="opacity:.75" title="Ouvertures et clics automatiques d\'un filtre de sécurité, ignorés">Scanner</span>');
+  return b.length ? " " + b.join(" ") : "";
+}
+// État de suivi explicite d'un message envoyé : ouvert ou pas, puis vidéo et
+// clic site affichés séparément (mêmes badges que l'accueil), ou « Pas cliqué ».
+// Comment l'adresse a été trouvée : site deviné depuis le nom ou trouvé par
+// le moteur de recherche, vérifié par le SIREN ou par le nom et la ville.
+function signalBadge(m){
+  const d = m.data || {};
+  const how = String(d.how || "");
+  if (!how) return "";
+  const site = String(d.site || "").replace(/^https?:\/\//, "");
+  const proof = /siren/.test(how) ? "SIREN sur le site" : "nom et ville sur le site";
+  return ' <span class="badge ' + (/^search/.test(how) ? "open" : "video") + '" title="' + esc(site) + " · " + proof + '">' + (/^search/.test(how) ? "Recherche web" : "Site deviné") + "</span>";
+}
+function trackState(m){
+  const SUPPRESSED = { desinscription: "Désinscrit", rebond: "Rebond", manuel: "Exclu", deja_contacte: "Exclu" };
+  const parts = [];
+  parts.push(m.opened_at
+    ? '<span class="badge open" title="Ouvert le ' + esc(dateTimeFr(m.opened_at)) + (m.open_count > 1 ? " (" + m.open_count + "×)" : "") + '">Ouvert</span>'
+    : '<span class="badge off">Pas ouvert</span>');
+  if (m.video_clicked_at) parts.push('<span class="badge video" title="Vidéo ouverte le ' + esc(dateTimeFr(m.video_clicked_at)) + '">▶ Vidéo</span>');
+  if (m.site_clicked_at) parts.push('<span class="badge clic" title="Site ouvert le ' + esc(dateTimeFr(m.site_clicked_at)) + '">Clic site</span>');
+  if (!m.video_clicked_at && !m.site_clicked_at) parts.push('<span class="badge off">Pas cliqué</span>');
+  if (m.scanner_at) parts.push('<span class="badge unsub" style="opacity:.75" title="Filtre de sécurité du destinataire (Hornet, Mimecast, Proofpoint, Defender…) : ' + esc(m.scanner_hits || 1) + ' ouverture(s) ou clic(s) automatiques ignorés, dernier le ' + esc(dateTimeFr(m.scanner_at)) + '">Scanner</span>');
+  (m.prospection_followups || []).filter(f => f.status === "sent").sort((a, b) => a.stage - b.stage).forEach(f =>
+    parts.push('<span class="badge sent" title="Relance ' + f.stage + ' envoyée le ' + esc(dateTimeFr(f.sent_at)) + '">Relance ' + f.stage + "</span>"));
+  if (m.replied_at) parts.push('<span class="badge open" title="Marqué « a répondu » le ' + esc(dateTimeFr(m.replied_at)) + ' : plus de relance">A répondu</span>');
+  if (m.suppressed) parts.push('<span class="badge unsub" title="Cette adresse ne sera plus jamais contactée">' + esc(SUPPRESSED[m.suppressed] || "Exclu") + "</span>");
+  return " " + parts.join(" ");
+}
+let logT = null, logSeq = 0;
+async function loadLog(){
+  // Deux chargements qui se croisent (changement de filtre pendant une requête) :
+  // seule la réponse de la dernière demande est affichée.
+  const seq = ++logSeq;
+  try {
+    const data = LOG.status === "followups"
+      ? await api("followups.list", { page: LOG.page, search: $("lq").value, stage: $("lStage").value })
+      : await api("queue.list", { status: LOG.status, page: LOG.page, search: $("lq").value, track: LOG.status === "sent" ? $("lTrack").value : "", how: $("lHow").value });
+    if (seq !== logSeq) return;
+    LOG.items = data.items; LOG.total = data.total; LOG.sel.clear();
+    renderLog();
+  } catch(e){ if (e.code !== "session") toast(e.message, 5000); }
+}
+function renderLog(){
+  document.querySelectorAll("#logTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.st === LOG.status));
+  $("lDateH").textContent = LOG.status === "sent" ? "Envoyé le" : LOG.status === "followups" ? "Relance envoyée le" : LOG.status === "all" ? "Envoyé / ajouté le" : "Ajouté le";
+  $("lTrack").hidden = LOG.status !== "sent";
+  $("lHow").hidden = LOG.status === "followups";
+  $("lStage").hidden = LOG.status !== "followups";
+  $("bLogRetry").hidden = LOG.status !== "failed";
+  $("bLogRemove").hidden = LOG.status === "sent" || LOG.status === "all" || LOG.status === "followups";
+  $("bLogRemove").textContent = LOG.status === "queued" ? "Retirer de la file" : "Supprimer";
+  const pages = Math.max(1, Math.ceil(LOG.total / 50));
+  $("lPage").textContent = "Page " + LOG.page + " / " + pages + " · " + fmt(LOG.total) + " ligne(s)";
+  const filtered = !!($("lq").value || (!$("lTrack").hidden && $("lTrack").value) || (!$("lHow").hidden && $("lHow").value) || (!$("lStage").hidden && $("lStage").value));
+  $("lTotal").textContent = fmt(LOG.total) + (filtered ? " filtré(s)" : "");
+  $("lTotal").style.background = filtered ? "var(--violet)" : "";
+  $("lTotal").style.color = filtered ? "#fff" : "";
+  $("lPrev").disabled = LOG.page <= 1; $("lNext").disabled = LOG.page >= pages;
+  $("lCount").textContent = "";
+  const empty = { all: "Aucun message pour l'instant.", queued: "La file est vide. L'automate la remplit tout seul dès qu'il est démarré, selon le ciblage.", sent: "Aucun message envoyé pour l'instant.", failed: "Aucun échec.", skipped: "Aucun message ignoré.", followups: "Aucune relance envoyée pour l'instant. Les relances se règlent dans Réglages." };
+  if (LOG.status === "followups"){
+    $("lBody").innerHTML = LOG.items.length ? LOG.items.map(f => { const m = f.message || {}; return '<tr class="click" data-msg="' + esc(m.id || "") + '">' +
+      '<td><input type="checkbox" class="cbx" disabled></td>' +
+      "<td><b>" + esc(niceCompany(m.company) || "—") + '</b><div class="meta">' + esc(m.email || "") + "</div></td>" +
+      '<td class="num">' + (m.score == null ? "—" : m.score) + "</td>" +
+      '<td class="nw"><span class="badge sent">Relance ' + esc(f.stage) + "</span>" + signalBadge(m) + "</td>" +
+      '<td class="nw">' + esc(dateTimeFr(f.sent_at)) + "</td>" +
+      '<td><span class="badge ' + (f.status === "sent" ? "sent" : "failed") + '">' + (f.status === "sent" ? "Envoyée" : "Échec") + "</span>" + (f.status === "sent" ? trackState(m) : "") + (f.error ? '<div class="meta">' + esc(f.error) + "</div>" : "") + "</td></tr>"; }).join("")
+      : '<tr><td colspan="6" class="empty"><b>Rien ici</b>' + esc(empty.followups) + "</td></tr>";
+    logSel();
+    return;
+  }
+  $("lBody").innerHTML = LOG.items.length ? LOG.items.map(m =>
+    '<tr class="click' + (LOG.sel.has(m.id) ? " sel" : "") + '" data-msg="' + esc(m.id) + '">' +
+    '<td><input type="checkbox" class="cbx" data-lsel="' + esc(m.id) + '"' + (LOG.sel.has(m.id) ? " checked" : "") + (m.status === "sent" || m.status === "sending" ? " disabled" : "") + "></td>" +
+    "<td><b>" + esc(niceCompany(m.company) || "—") + '</b><div class="meta">' + esc(m.email) + "</div></td>" +
+    '<td class="num">' + (m.score == null ? "—" : m.score) + "</td>" +
+    '<td class="nw">' + esc(ORIGIN[m.origin] || m.origin) + signalBadge(m) + "</td>" +
+    '<td class="nw">' + esc(dateTimeFr(LOG.status === "sent" || (LOG.status === "all" && m.sent_at) ? m.sent_at : m.created_at)) + "</td>" +
+    '<td><span class="badge ' + esc(m.status) + '">' + esc(BADGE[m.status] || m.status) + "</span>" + (m.status === "sent" ? trackState(m) : "") + (m.error && m.status !== "sent" ? '<div class="meta">' + esc(m.error) + "</div>" : "") + "</td></tr>"
+  ).join("") : '<tr><td colspan="6" class="empty"><b>Rien ici</b>' + esc(empty[LOG.status]) + "</td></tr>";
+  logSel();
+}
+function logSel(){
+  $("bLogRemove").disabled = !LOG.sel.size; $("bLogRetry").disabled = !LOG.sel.size;
+  const selectable = LOG.items.filter(m => m.status !== "sent" && m.status !== "sending");
+  $("lAll").checked = !!(selectable.length && selectable.every(m => LOG.sel.has(m.id)));
+  $("lCount").textContent = LOG.sel.size ? fmt(LOG.sel.size) + " sélectionné(s)" : "";
+}
+$("logTabs").addEventListener("click", ev => { const t = ev.target.closest("[data-st]"); if (!t) return; LOG.status = t.dataset.st; LOG.page = 1; loadLog(); });
+$("lq").addEventListener("input", () => { clearTimeout(logT); logT = setTimeout(() => { LOG.page = 1; loadLog(); }, 300); });
+$("lTrack").addEventListener("change", () => { LOG.page = 1; loadLog(); });
+$("lHow").addEventListener("change", () => { LOG.page = 1; loadLog(); });
+$("lStage").addEventListener("change", () => { LOG.page = 1; loadLog(); });
+$("lPrev").addEventListener("click", () => { LOG.page--; loadLog(); });
+$("lNext").addEventListener("click", () => { LOG.page++; loadLog(); });
+$("lAll").addEventListener("change", ev => {
+  LOG.items.filter(m => m.status !== "sent" && m.status !== "sending").forEach(m => ev.target.checked ? LOG.sel.add(m.id) : LOG.sel.delete(m.id));
+  renderLog();
+});
+$("lBody").addEventListener("click", ev => {
+  const cb = ev.target.closest("[data-lsel]");
+  if (cb){ const id = cb.getAttribute("data-lsel"); cb.checked ? LOG.sel.add(id) : LOG.sel.delete(id); cb.closest("tr").classList.toggle("sel", cb.checked); logSel(); return; }
+  const tr = ev.target.closest("[data-msg]");
+  if (tr) openMessage(tr.getAttribute("data-msg"));
+});
+async function openMessage(id){
+  try {
+    const { message: m } = await api("queue.get", { id });
+    const d = m.data || {};
+    let body;
+    if (m.subject && m.body){
+      body = '<div class="mail"><div class="mail-h"><div><span>À : </span>' + esc(m.email) + "</div><div><span>Objet : </span><b>" + esc(m.subject) + '</b></div></div><div class="mail-b">' + esc(m.body) + "</div></div>";
+    } else {
+      const tpl = state && state.templates.find(t => t.active);
+      body = tpl ? '<p class="note" style="margin-bottom:10px">Aperçu avec le modèle « ' + esc(tpl.name) + " » (l'automate tire un modèle actif au hasard au moment de l'envoi).</p><div class=\"mail\">" + mailHtml(tpl, state.settings, d, m.email) + "</div>"
+        : '<p class="note">Aucun modèle actif pour l\'aperçu.</p>';
+    }
+    openModal(niceCompany(m.company) || m.email, (BADGE[m.status] || m.status) + (m.sent_at ? " le " + dateTimeFr(m.sent_at) : " · ajouté le " + dateTimeFr(m.created_at)),
+      '<div class="dl">' +
+        "<div><dt>E-mail</dt><dd>" + esc(m.email) + "</dd></div>" +
+        "<div><dt>Prénom / nom</dt><dd>" + esc([d.prenom, d.nom].filter(Boolean).join(" ") || "—") + "</dd></div>" +
+        "<div><dt>Ville</dt><dd>" + esc([d.cp, d.ville].filter(Boolean).join(" ") || "—") + "</dd></div>" +
+        "<div><dt>Activité</dt><dd>" + esc(d.metier || "—") + (d.naf ? ' <span class="muted">(' + esc(d.naf) + ")</span>" : "") + "</dd></div>" +
+        "<div><dt>Site internet</dt><dd>" + (d.site ? '<a href="' + esc(d.site) + '" target="_blank" rel="noopener">' + esc(String(d.site).replace(/^https?:\/\//, "")) + "</a>" + (d.how ? ' <span class="muted">(' + (/^search/.test(d.how) ? "moteur de recherche" : "domaine deviné") + ", " + (/siren/.test(d.how) ? "SIREN vérifié" : "nom et ville vérifiés") + ")</span>" : "") : "—") + "</dd></div>" +
+        "<div><dt>SIREN</dt><dd>" + (m.siren ? '<a href="https://annuaire-entreprises.data.gouv.fr/entreprise/' + esc(m.siren) + '" target="_blank" rel="noopener">' + esc(m.siren) + "</a>" : "—") + "</dd></div>" +
+        "<div><dt>Origine</dt><dd>" + esc(ORIGIN[m.origin] || m.origin) + (m.score != null ? " · score " + m.score : "") + "</dd></div>" +
+        (d.tel ? "<div><dt>Téléphone</dt><dd>" + esc(d.tel) + "</dd></div>" : "") +
+        (m.status === "sent" ? "<div><dt>Suivi</dt><dd>" + ([
+          m.opened_at ? "ouvert le " + dateTimeFr(m.opened_at) + (m.open_count > 1 ? " (" + m.open_count + "×)" : "") : "",
+          m.video_clicked_at ? "vidéo ouverte le " + dateTimeFr(m.video_clicked_at) : "",
+          m.site_clicked_at ? "lien cliqué le " + dateTimeFr(m.site_clicked_at) : "",
+        ].filter(Boolean).map(esc).join(" · ") || "pas encore ouvert") + (m.scanner_at ? " · filtre de sécurité : " + esc(m.scanner_hits || 1) + " clic(s) automatique(s) ignoré(s)" : "") + "</dd></div>" : "") +
+        (m.status === "sent" ? "<div><dt>Relances</dt><dd>" + ((m.prospection_followups || []).sort((a, b) => a.stage - b.stage).map(f =>
+          "relance " + f.stage + " : " + (f.status === "sent" ? "envoyée le " + dateTimeFr(f.sent_at) : f.status === "failed" ? "échec" : "en attente")).map(esc).join(" · ")
+          || (m.replied_at ? "arrêtées" : "aucune pour l'instant")) + (m.replied_at ? " · marqué « a répondu » le " + esc(dateTimeFr(m.replied_at)) : "") + "</dd></div>" : "") +
+        (m.error ? '<div style="grid-column:1/-1"><dt>Détail</dt><dd>' + esc(m.error) + "</dd></div>" : "") +
+      "</div>" + body,
+      m.status === "sent" ? '<button type="button" class="b ' + (m.replied_at ? "b-out" : "b-main") + '" data-replied="' + esc(m.id) + '" data-value="' + (m.replied_at ? "0" : "1") + '">' + (m.replied_at ? "Annuler « a répondu »" : "A répondu : arrêter les relances") + "</button>" : "");
+  } catch(e){ toast(e.message, 5000); }
+}
+$("mF").addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-replied]");
+  if (!b) return;
+  busy(b, true, "…");
+  try {
+    await api("queue.replied", { id: b.getAttribute("data-replied"), replied: b.getAttribute("data-value") === "1" });
+    toast(b.getAttribute("data-value") === "1" ? "Relances arrêtées pour cette entreprise." : "Relances réactivées.");
+    closeModal(); await loadLog(); loadState().catch(() => {});
+  } catch(e){ toast(e.message, 5000); busy(b, false); }
+});
+$("bLogRemove").addEventListener("click", async ev => {
+  if (!LOG.sel.size) return;
+  if (!confirm((LOG.status === "queued" ? "Retirer " : "Supprimer ") + fmt(LOG.sel.size) + " message(s) ?" + (LOG.status === "queued" ? "\n\nCes entreprises pourront être recontactées plus tard." : ""))) return;
+  const btn = ev.currentTarget;
+  busy(btn, true, "…");
+  try { const { removed } = await api("queue.remove", { ids: [...LOG.sel] }); toast(fmt(removed) + " message(s) retiré(s)."); await loadLog(); loadState().catch(() => {}); }
+  catch(e){ toast(e.message, 5000); }
+  busy(btn, false); renderLog();
+});
+$("bLogRetry").addEventListener("click", async ev => {
+  if (!LOG.sel.size) return;
+  const btn = ev.currentTarget;
+  busy(btn, true, "…");
+  try { const { retried } = await api("queue.retry", { ids: [...LOG.sel] }); toast(fmt(retried) + " message(s) remis en file."); await loadLog(); loadState().catch(() => {}); }
+  catch(e){ toast(e.message, 5000); }
+  busy(btn, false); renderLog();
+});
+
+/* ============================================================
+   EXCLUSIONS
+   ============================================================ */
+const SUPP = { page: 1, total: 0 };
+const REASON = { desinscription: "Désinscription", rebond: "Adresse refusée", manuel: "Ajout manuel", deja_contacte: "Déjà contacté (import)" };
+let suppT = null;
+async function loadSupp(){
+  try {
+    const data = await api("suppressions.list", { page: SUPP.page, search: $("sq").value });
+    SUPP.total = data.total;
+    const pages = Math.max(1, Math.ceil(data.total / 50));
+    $("sPage").textContent = "Page " + SUPP.page + " / " + pages + " · " + fmt(data.total) + " adresse(s)";
+    $("sPrev").disabled = SUPP.page <= 1; $("sNext").disabled = SUPP.page >= pages;
+    $("sBody").innerHTML = data.items.length ? data.items.map(s =>
+      "<tr><td><b>" + esc(s.email) + "</b></td><td>" + esc(REASON[s.reason] || s.reason) + '</td><td class="nw">' + esc(dateFr(s.created_at)) +
+      '</td><td><button type="button" class="b b-out b-xs" data-unsupp="' + esc(s.email) + '">Retirer</button></td></tr>').join("")
+      : '<tr><td colspan="4" class="empty"><b>Aucune exclusion</b>Les désinscriptions et adresses refusées apparaîtront ici automatiquement.</td></tr>';
+  } catch(e){ if (e.code !== "session") toast(e.message, 5000); }
+}
+$("sq").addEventListener("input", () => { clearTimeout(suppT); suppT = setTimeout(() => { SUPP.page = 1; loadSupp(); }, 300); });
+$("sPrev").addEventListener("click", () => { SUPP.page--; loadSupp(); });
+$("sNext").addEventListener("click", () => { SUPP.page++; loadSupp(); });
+$("bSuppAdd").addEventListener("click", async ev => {
+  const text = $("sAdd").value.trim();
+  if (!text) return;
+  const btn = ev.currentTarget;
+  busy(btn, true, "Ajout…");
+  try {
+    const r = await api("suppressions.add", { emails: text });
+    $("sAdd").value = "";
+    toast(fmt(r.added) + " adresse(s) exclue(s)" + (r.invalid ? " · " + fmt(r.invalid) + " invalide(s) ignorée(s)" : "") + ".");
+    loadSupp(); loadState().catch(() => {});
+  } catch(e){ toast(e.message, 5000); }
+  busy(btn, false);
+});
+$("sBody").addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-unsupp]");
+  if (!b) return;
+  const email = b.getAttribute("data-unsupp");
+  if (!confirm("Retirer " + email + " des exclusions ?\n\nNe le faites que si la personne vous a explicitement demandé à être recontactée.")) return;
+  try { await api("suppressions.remove", { email }); toast("Adresse retirée des exclusions."); loadSupp(); loadState().catch(() => {}); }
+  catch(e){ toast(e.message, 5000); }
+});
+
+/* ============================================================
+   RÉGLAGES
+   ============================================================ */
+$("dayChips").innerHTML = [1, 2, 3, 4, 5, 6, 7].map(d => '<label class="chip"><input type="checkbox" name="day" value="' + d + '"> ' + DAY_NAMES[d].charAt(0).toUpperCase() + DAY_NAMES[d].slice(1) + "</label>").join("");
+function fillSettings(){
+  if (!state) return;
+  const s = state.settings;
+  $("sName").value = s.sender_name || ""; $("sEmail").value = s.sender_email || ""; $("sReply").value = s.reply_to || "";
+  $("sSig").value = s.signature || ""; $("sFooter").value = s.footer_identity || ""; $("sVideo").value = s.video_url || "";
+  $("sCap").value = s.daily_cap; $("sWarm").checked = !!s.warmup_enabled; $("sWarmStart").value = s.warmup_start; $("sWarmStep").value = s.warmup_step;
+  $("sWinStart").value = hm(s.window_start); $("sWinEnd").value = hm(s.window_end);
+  $("sGapMin").value = s.min_gap_seconds; $("sGapMax").value = s.max_gap_seconds;
+  $("sErr").value = s.max_consecutive_errors;
+  $("sFuEnabled").checked = !!s.followup_enabled; $("sFu1").value = s.followup1_days || 7; $("sFu2").value = s.followup2_days || 21;
+  $("sFuOpened").checked = s.followup_opened_only !== false;
+  $("sFuSince").value = s.followup_since ? new Date(s.followup_since).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }) : "";
+  const fu = state.followups || {};
+  $("fuNote").textContent = s.followup_enabled
+    ? fmt(fu.due || 0) + " relance(s) à envoyer · " + fmt(fu.sent || 0) + " envoyée(s) au total · " + fmt(fu.replied || 0) + " entreprise(s) marquée(s) « a répondu »"
+    : "Relances désactivées : chaque entreprise ne reçoit qu'un seul message.";
+  document.querySelectorAll("input[name=day]").forEach(c => { c.checked = s.send_days.includes(Number(c.value)); });
+  const smtp = state.smtp;
+  const st = $("smtpSt");
+  st.className = "st " + (smtp.configured ? "st-ok" : "st-warn");
+  st.querySelector("span").textContent = smtp.configured ? "Mot de passe enregistré" : "Mot de passe manquant";
+  $("smtpInfo").innerHTML = "Serveur <b>" + esc(smtp.host) + "</b>, port <b>" + esc(smtp.port) + "</b> (SSL). Identifiant : l'adresse d'envoi ci-dessus (ou le secret YONTECH_SMTP_USER)." +
+    (smtp.configured ? " Utilisez « M'envoyer un test » dans Messages pour vérifier la connexion." : "");
+  $("setMsg").textContent = "";
+  capacityNote();
+}
+// Capacité réelle du créneau : l'automate enchaîne les envois en attendant
+// l'intervalle tiré au hasard entre deux messages.
+function capacityNote(){
+  const [h1, m1] = ($("sWinStart").value || "08:00").split(":").map(Number), [h2, m2] = ($("sWinEnd").value || "18:30").split(":").map(Number);
+  const seconds = Math.max(0, ((h2 * 60 + m2) - (h1 * 60 + m1)) * 60);
+  const gap = Math.max(5, (Number($("sGapMin").value || 5) + Number($("sGapMax").value || 5)) / 2);
+  const capacity = Math.floor(seconds / gap), cap = Number($("sCap").value || 0);
+  $("capNote").innerHTML = "Capacité de ce créneau : <b>≈ " + fmt(capacity) + " messages par jour</b>." +
+    (cap > capacity ? " Le quota de " + fmt(cap) + " ne sera pas atteint : élargissez le créneau ou réduisez l'intervalle." : "");
+}
+["sWinStart", "sWinEnd", "sGapMin", "sGapMax", "sCap"].forEach(id => $(id).addEventListener("input", capacityNote));
+$("setForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const days = [...document.querySelectorAll("input[name=day]:checked")].map(c => Number(c.value));
+  const payload = {
+    sender_name: $("sName").value, sender_email: $("sEmail").value, reply_to: $("sReply").value,
+    signature: $("sSig").value, footer_identity: $("sFooter").value, video_url: $("sVideo").value.trim(),
+    daily_cap: $("sCap").value, warmup_enabled: $("sWarm").checked, warmup_start: $("sWarmStart").value, warmup_step: $("sWarmStep").value,
+    window_start: $("sWinStart").value, window_end: $("sWinEnd").value, send_days: days,
+    min_gap_seconds: Math.round(Number($("sGapMin").value)), max_gap_seconds: Math.round(Number($("sGapMax").value)),
+    max_consecutive_errors: $("sErr").value,
+    followup_enabled: $("sFuEnabled").checked, followup1_days: $("sFu1").value, followup2_days: $("sFu2").value,
+    followup_opened_only: $("sFuOpened").checked, followup_since: $("sFuSince").value
+  };
+  const btn = $("bSetSave");
+  busy(btn, true, "Enregistrement…");
+  try {
+    const { settings } = await api("settings.save", payload);
+    state.settings = settings;
+    await loadState();
+    fillSettings();
+    $("setMsg").textContent = "Réglages enregistrés.";
+    toast("Réglages enregistrés.");
+  } catch(e){ $("setMsg").textContent = e.message; }
+  busy(btn, false);
+});
+
+/* ============================================================
+   AIDE
+   ============================================================ */
+function openHelp(topic){
+  if (topic === "smtp"){
+    openModal("Enregistrer le mot de passe Hostinger", "Une seule fois, côté serveur",
+      '<p class="note">Le mot de passe de la boîte d\'envoi ne transite jamais par cet outil. Il est enregistré comme secret des fonctions Supabase :</p>' +
+      '<p class="note" style="margin-top:12px"><b>1.</b> Tableau de bord Supabase → projet de l\'automate Yontech → <b>Edge Functions</b> → <b>Secrets</b> (ou <code class="k">YONTECH_SMTP_PASSWORD=… ./deploy.sh secrets</code>).</p>' +
+      '<p class="note"><b>2.</b> Ajoutez un secret nommé <code class="k">YONTECH_SMTP_PASSWORD</code> avec le mot de passe de la boîte Hostinger de yontech.fr (celui de la connexion au webmail).</p>' +
+      '<p class="note"><b>3.</b> Renseignez l\'adresse de cette boîte dans Réglages → Expéditeur, puis envoyez-vous un test depuis Messages.</p>' +
+      '<p class="note" style="margin-top:12px">Les envois passent par <code class="k">smtp.hostinger.com</code>, port 465 (SSL) : les ports 25 et 587 sont bloqués par Supabase.</p>');
+    return;
+  }
+  openModal("Comment fonctionne l\'automate", "Sources, cadence, cadre légal",
+    '<p class="sect-t">Le principe</p>' +
+    '<p class="note">Tout se passe sur le serveur, ordinateur éteint. L\'automate lit la <b>base SIRENE</b> de l\'INSEE (toutes les entreprises actives, tous secteurs) selon votre <b>ciblage</b>, cherche le site internet de chaque entreprise, y lit une adresse e-mail, et garde une réserve d\'avance. Toutes les quelques secondes, dans le créneau réglé, il prend la suivante, personnalise un de vos modèles et l\'envoie depuis la boîte Hostinger de Yontech. Vous ne réglez que les paramètres.</p>' +
+    '<p class="note">Chaque entreprise ne reçoit <b>qu\'un seul message</b>, jamais deux, même si elle réapparaît dans une recherche ; puis au plus deux relances si vous les activez. Les réponses arrivent directement dans votre boîte mail.</p>' +
+    '<p class="sect-t" style="margin-top:20px">Trouver les adresses</p>' +
+    '<p class="note">La base SIRENE ne publie aucune coordonnée. L\'automate <b>devine le site</b> de l\'entreprise à partir de son nom (dupont-mecanique.fr, dupontmecanique.com…) et, si une clé est configurée, l\'<b>interroge un moteur de recherche</b>. Un site n\'est retenu que s\'il porte le SIREN ou le SIRET de l\'entreprise (mentions légales) ou son nom avec sa ville. L\'adresse est lue sur la page d\'accueil, la page contact ou les mentions légales : celle du dirigeant d\'abord, sinon contact@, info@… sur le domaine de l\'entreprise de préférence. Comptez environ une adresse pour cinq entreprises ; la recherche tourne jour et nuit, l\'envoi aux heures de bureau.</p>' +
+    '<p class="sect-t" style="margin-top:20px">La cadence et la réputation de yontech.fr</p>' +
+    '<p class="note">Les messages partent de votre vrai domaine. Pour que Gmail et Outlook continuent de les accepter, l\'automate <b>monte progressivement en volume</b> (50 le premier jour, +50 par jour d\'envoi, réglable), espace les messages au hasard et ne travaille qu\'aux heures de bureau. En cas d\'incident passager ou de quota Hostinger atteint, il patiente puis reprend seul ; il ne <b>se met en pause</b> que si la boîte refuse les envois, et vous prévient alors par e-mail.</p>' +
+    '<p class="note">Le suivi (ouverture, clics) est discret : un pixel et des liens réécrits dans la version HTML seulement ; le lien de désinscription n\'est jamais suivi, et les clics automatiques des filtres de sécurité sont comptés à part (« scanner »).</p>' +
+    '<p class="sect-t" style="margin-top:20px">Le score (sur 100)</p>' +
+    '<p class="note">Effectif (30 points au mieux, de 20 à 199 salariés), établissements ouverts (20), chiffre d\'affaires (16), croissance (12), ancienneté (10), adresse sur le domaine de l\'entreprise (10). La file part par score décroissant. Il classe des profils à partir de signaux publics ; il ne mesure pas une intention d\'achat.</p>' +
+    '<p class="sect-t" style="margin-top:20px">Cadre légal (prospection B2B)</p>' +
+    '<p class="note">En France, un e-mail de prospection vers une adresse professionnelle est autorisé sans consentement préalable s\'il concerne l\'activité de la personne. En contrepartie, chaque message doit identifier l\'expéditeur, indiquer l\'origine des données (ici : base SIRENE et site internet de l\'entreprise) et proposer une <b>désinscription simple</b>. L\'automate ajoute tout cela automatiquement, gère la désinscription en un clic (lien et en-tête reconnu par Gmail/Outlook) et n\'écrit plus jamais à une adresse désinscrite. Les adresses personnelles nominatives trouvées sur un site sont traitées avec la même prudence : droit d\'opposition immédiat, jamais de revente.</p>' +
+    '<p class="note">Si quelqu\'un vous répond « stop », ajoutez son adresse dans <b>Exclusions</b>.</p>');
+}
+$("bHelp").addEventListener("click", () => openHelp());
+
+boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# Configuration locale minimale de l'outil de prospection Yontech. Les
+# secrets et l'identifiant du projet distant ne sont jamais stockés ici :
+# chaque commande de déploiement reçoit --project-ref explicitement.
+#
+# Les fonctions peuvent être déployées sur n'importe quel projet Supabase
+# (projet dédié recommandé) : toutes les tables, fonctions SQL et tâches
+# planifiées sont préfixées « yontech_ » / « yontech- » et n'entrent en
+# collision avec rien.
+project_id = "prospection-yontech"
+
+[db]
+major_version = 17
+
+# Outil interne prospection.yontech.fr : la fonction vérifie elle-même le
+# compte connecté (liste YONTECH_ADMIN_EMAILS).
+[functions.yontech-prospection-api]
+verify_jwt = true
+
+# Réveillées par pg_cron ; protégées par le secret de yontech_prospection_runtime.
+[functions.yontech-prospection-sender]
+verify_jwt = false
+
+[functions.yontech-prospection-sourcer]
+verify_jwt = false
+
+[functions.yontech-prospection-bounces]
+verify_jwt = false
+
+# Désinscription en un clic (RFC 8058) et page de désinscription publique.
+[functions.yontech-prospection-unsubscribe]
+verify_jwt = false
+
+# Suivi public des messages : pixel d'ouverture et redirection des liens.
+[functions.yontech-prospection-track]
+verify_jwt = false
