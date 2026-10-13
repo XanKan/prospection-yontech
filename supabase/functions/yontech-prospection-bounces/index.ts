@@ -16,6 +16,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const MAIL_API = "https://api.mail.hostinger.com";
 
 const DAEMON_RE = /mailer-daemon|postmaster/i;
+// Réponses automatiques (absence, accusé de réception) : jamais comptées comme une réponse.
+const AUTO_RE = /absence|out of office|auto.?reply|réponse automatique|automatic reply|accusé de réception|delivery|undeliver|mailer-daemon|postmaster|noreply|no-reply|ne pas répondre/i;
 const SUBJECT_RE = /undeliver|delivery status|delivery fail|returned to sender|non.remise|mail delivery/i;
 const RECIPIENT_RE = /<([^<>\s]+@[^<>\s]+)>:\s*host[\s\S]{0,400}?said:\s*(\d{3})([\s\S]{0,300}?)(?:\(in reply|\n\n|$)/gi;
 
@@ -52,11 +54,21 @@ Deno.serve(async (req) => {
     const fresh = messages.filter((m) => Number(m.uid) > lastUid);
     const maxUid = messages.reduce((max, m) => Math.max(max, Number(m.uid) || 0), lastUid);
 
-    let bounced = 0, softs = 0;
+    let bounced = 0, softs = 0, replied = 0;
     const details: Array<Record<string, unknown>> = [];
     for (const message of fresh) {
-      const fromAddress = String(message.from?.address || "");
-      if (!DAEMON_RE.test(fromAddress) && !SUBJECT_RE.test(String(message.subject || ""))) continue;
+      const fromAddress = String(message.from?.address || "").toLowerCase();
+      const subject = String(message.subject || "");
+      if (!DAEMON_RE.test(fromAddress) && !SUBJECT_RE.test(subject)) {
+        // Réponse d'un prospect : la ligne passe « a répondu », ses relances s'arrêtent.
+        if (!fromAddress || AUTO_RE.test(fromAddress + " " + subject)) continue;
+        const { data: prospect } = await db.from("yontech_prospection_messages").select("id").eq("email", fromAddress).eq("status", "sent").is("replied_at", null).limit(1).maybeSingle();
+        if (prospect?.id) {
+          const { error: replyError } = await db.rpc("yontech_prospection_mark_replied", { target_id: prospect.id, replied: true });
+          if (!replyError) { replied++; details.push({ email: fromAddress, replied: true }); }
+        }
+        continue;
+      }
       const content = await mailApi(`/api/v1/mailboxes/${mailbox}/folders/${folder}/messages/${message.uid}/text`);
       const text = String(content?.data?.text || "");
       for (const match of text.matchAll(RECIPIENT_RE)) {
@@ -69,7 +81,7 @@ Deno.serve(async (req) => {
     }
 
     await db.from("yontech_prospection_runtime").update({ last_bounce_uid: maxUid, last_bounce_scan_at: new Date().toISOString() }).eq("id", 1);
-    return json({ state: "scanned", examined: fresh.length, bounced, temporary: softs, details });
+    return json({ state: "scanned", examined: fresh.length, bounced, replied, temporary: softs, details });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[Yontech Rebonds] Erreur", message);
