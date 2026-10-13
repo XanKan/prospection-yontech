@@ -3,9 +3,12 @@ import { sendNext } from "../_shared/yontech-jobs.ts";
 
 // Réveillée par pg_cron (tâche yontech-prospection-sender) uniquement
 // lorsqu'un envoi est dû. Le réveil a lieu au plus une fois par minute : pour
-// tenir les gros quotas, chaque réveil ENCHAÎNE les envois pendant ~50
-// secondes, en respectant l'espacement, le créneau et le quota décidés
-// atomiquement par yontech_prospection_claim_next() à chaque message.
+// tenir les gros quotas, chaque réveil ENCHAÎNE les envois pendant ~2
+// minutes, en respectant l'espacement, le créneau et le quota décidés
+// atomiquement par yontech_prospection_claim_next() à chaque message. Deux
+// réveils peuvent se chevaucher sans risque : la réservation est atomique.
+// (À 50 secondes par réveil, le débit plafonnait à un message par minute,
+// soit ~70 par heure, loin des 1 500 par jour demandés.)
 // La recherche d'entreprises est une tâche à part (yontech-prospection-sourcer).
 
 function json(data: unknown, status = 200) {
@@ -15,7 +18,7 @@ function json(data: unknown, status = 200) {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function sendLoop(db: Parameters<typeof sendNext>[0]) {
-  const deadline = Date.now() + 50_000;
+  const deadline = Date.now() + 120_000;
   let sent = 0, last: Record<string, unknown> = {};
   while (Date.now() < deadline) {
     last = (await sendNext(db)) as Record<string, unknown>;
