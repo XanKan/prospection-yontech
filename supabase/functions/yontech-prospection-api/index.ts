@@ -126,7 +126,8 @@ Deno.serve(async (req) => {
         db.rpc("yontech_prospection_scanned_stats", {}),
       ]);
       for (const r of [settings, templates, queued, sent, failed, skipped, suppressions, sentToday, cap, recent, history, opened, video, clickedSite, followups, scanned, scanStats]) if (r.error) throw r.error;
-      const s = settings.data, activeTemplates = (templates.data || []).filter((t) => t.active && (t.kind || "initial") === "initial").length;
+      // deno-lint-ignore no-explicit-any
+      const s = settings.data as Record<string, any>, activeTemplates = (templates.data || []).filter((t) => t.active && (t.kind || "initial") === "initial").length;
       const now = parisNow();
       const counts = { queued: queued.count || 0, sent: sent.count || 0, failed: failed.count || 0, skipped: skipped.count || 0, suppressions: suppressions.count || 0 };
       const capToday = Number(cap.data || 0), today = Number(sentToday.data || 0);
@@ -140,11 +141,12 @@ Deno.serve(async (req) => {
       const perDay: Record<string, { p: number; r: number }> = {};
       for (const row of (history.data || []) as Array<{ day: string; premiers: number; relances: number }>) perDay[String(row.day).slice(0, 10)] = { p: Number(row.premiers || 0), r: Number(row.relances || 0) };
       const { data: recentFollowups } = await db.from("yontech_prospection_followups").select("stage,sent_at,yontech_prospection_messages(id,company,email,origin,opened_at,video_clicked_at,site_clicked_at,scanner_at)").eq("status", "sent").order("sent_at", { ascending: false }).limit(8);
-      const recentAll = [
-        ...((recent.data || []) as Array<Record<string, unknown>>).map((r) => ({ ...r, kind: "initial" as const })),
-        ...((recentFollowups || []) as Array<{ stage: number; sent_at: string; yontech_prospection_messages: Record<string, unknown> | null }>).filter((f) => f.yontech_prospection_messages)
-          .map((f) => ({ ...(f.yontech_prospection_messages as Record<string, unknown>), sent_at: f.sent_at, kind: "followup" as const, stage: f.stage })),
-      ].sort((a, b) => String(b.sent_at).localeCompare(String(a.sent_at))).slice(0, 8);
+      type Recent = Record<string, unknown> & { sent_at?: string };
+      const recentAll: Recent[] = [
+        ...((recent.data || []) as unknown as Array<Record<string, unknown>>).map((r) => ({ ...r, kind: "initial" }) as Recent),
+        ...((recentFollowups || []) as unknown as Array<{ stage: number; sent_at: string; yontech_prospection_messages: Record<string, unknown> | null }>).filter((f) => f.yontech_prospection_messages)
+          .map((f) => ({ ...(f.yontech_prospection_messages as Record<string, unknown>), sent_at: f.sent_at, kind: "followup", stage: f.stage }) as Recent),
+      ].sort((a: Recent, b: Recent) => String(b.sent_at).localeCompare(String(a.sent_at))).slice(0, 8);
       return response(req, {
         settings: s, templates: templates.data || [], counts, sentToday: today, capToday, status, missing,
         smtp: { configured: smtpConfigured(), host: smtpHost(), port: smtpPort() },
