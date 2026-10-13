@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     }
     return result.data;
   };
-  const SETTINGS_COLUMNS = "id,paused,pause_reason,sender_name,sender_email,reply_to,signature,footer_identity,video_url,daily_cap,warmup_enabled,warmup_start,warmup_step,window_start,window_end,send_days,min_gap_seconds,max_gap_seconds,max_consecutive_errors,require_first_name,followup_enabled,followup1_days,followup2_days,followup_opened_only,followup_since,autopilot,autopilot_target,autopilot_min_score,autopilot_batch,last_sourcing_at,last_sourcing_report,next_send_at,consecutive_errors,last_error,last_error_at,last_run_at,updated_at";
+  const SETTINGS_COLUMNS = "id,paused,pause_reason,sender_name,sender_email,reply_to,signature,footer_identity,video_url,daily_cap,warmup_enabled,warmup_start,warmup_step,window_start,window_end,send_days,min_gap_seconds,max_gap_seconds,max_consecutive_errors,require_first_name,followup_enabled,followup1_days,followup2_days,followup_opened_only,followup_since,autopilot,autopilot_target,autopilot_min_score,autopilot_batch,site_share,last_sourcing_at,last_sourcing_report,next_send_at,consecutive_errors,last_error,last_error_at,last_run_at,updated_at";
 
   try {
     if (action === "state") {
@@ -106,9 +106,9 @@ Deno.serve(async (req) => {
       const { data: runtime } = await db.from("yontech_prospection_runtime").select("sender_url").eq("id", 1).single();
       if (runtime && runtime.sender_url !== senderUrl) await db.from("yontech_prospection_runtime").update({ sender_url: senderUrl }).eq("id", 1);
 
-      const [settings, templates, queued, sent, failed, skipped, suppressions, sentToday, cap, recent, history, opened, video, clickedSite, followups, scanned, scanStats] = await Promise.all([
+      const [settings, templates, queued, sent, failed, skipped, suppressions, sentToday, cap, recent, history, opened, video, clickedSite, followups, scanned, scanStats, campaigns] = await Promise.all([
         db.from("yontech_prospection_settings").select(SETTINGS_COLUMNS).eq("id", 1).single(),
-        db.from("yontech_prospection_templates").select("id,name,subject,body,active,kind,audience,updated_at").order("created_at"),
+        db.from("yontech_prospection_templates").select("id,name,subject,body,active,kind,audience,campagne,updated_at").order("created_at"),
         db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).in("status", ["queued", "sending"]),
         db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "sent"),
         db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "failed"),
@@ -124,8 +124,9 @@ Deno.serve(async (req) => {
         db.rpc("yontech_prospection_followup_stats", {}),
         db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).not("scanner_at", "is", null),
         db.rpc("yontech_prospection_scanned_stats", {}),
+        db.rpc("yontech_prospection_campaign_stats", {}),
       ]);
-      for (const r of [settings, templates, queued, sent, failed, skipped, suppressions, sentToday, cap, recent, history, opened, video, clickedSite, followups, scanned, scanStats]) if (r.error) throw r.error;
+      for (const r of [settings, templates, queued, sent, failed, skipped, suppressions, sentToday, cap, recent, history, opened, video, clickedSite, followups, scanned, scanStats, campaigns]) if (r.error) throw r.error;
       // deno-lint-ignore no-explicit-any
       const s = settings.data as Record<string, any>, activeTemplates = (templates.data || []).filter((t) => t.active && (t.kind || "initial") === "initial").length;
       const now = parisNow();
@@ -155,6 +156,8 @@ Deno.serve(async (req) => {
         tracking: { opened: opened.count || 0, video: video.count || 0, site: clickedSite.count || 0, scanner: scanned.count || 0 },
         followups: followups.data || { due: 0, sent: 0, sent_today: 0, replied: 0 },
         scanned: scanStats.data || { total: 0, sites: 0, emails: 0, today: 0, emails_today: 0 },
+        // Compteurs par campagne (logiciel, site) : en file, envoyés, aujourd'hui, ouverts, clics, réponses.
+        campaigns: campaigns.data || {},
       });
     }
 
@@ -204,6 +207,8 @@ Deno.serve(async (req) => {
       if ("autopilot_target" in v) patch.autopilot_target = normalizeTarget(v.autopilot_target);
       if ("autopilot_min_score" in v) patch.autopilot_min_score = integer(v.autopilot_min_score, 0, 100);
       if ("autopilot_batch" in v) patch.autopilot_batch = integer(v.autopilot_batch, 5, 500);
+      // Part du quota quotidien réservée à la campagne « Sites internet » (0 à 100 %).
+      if ("site_share" in v) patch.site_share = integer(v.site_share, 0, 100);
       // Nouveau ciblage : les entreprises trouvées pour l'ancien et pas encore
       // contactées sont retirées, la file se recharge avec le nouveau.
       let replaced = 0;
@@ -230,7 +235,9 @@ Deno.serve(async (req) => {
       const subject = kind === "initial" ? text(payload.subject, 200) : (text(payload.subject, 200) || "Re : (objet du premier message)");
       // Public : toutes les entreprises, sans site internet (annuaire RGE) ou avec site.
       const audience = ["tous", "sanssite", "avecsite"].includes(String(payload.audience)) ? String(payload.audience) : "tous";
-      const row = { name: text(payload.name, 120), subject, body: text(payload.body, 8000), active: payload.active !== false, kind, audience, updated_at: new Date().toISOString() };
+      // Campagne : « logiciel » (développement, applications) ou « site » (création et refonte de sites internet).
+      const campagne = ["logiciel", "site"].includes(String(payload.campagne)) ? String(payload.campagne) : "logiciel";
+      const row = { name: text(payload.name, 120), subject, body: text(payload.body, 8000), active: payload.active !== false, kind, audience, campagne, updated_at: new Date().toISOString() };
       if (!row.name || !row.subject || !row.body) throw fail("Nom, objet et message sont obligatoires.");
       const unknown = unknownVariables(row.subject + "\n" + row.body);
       if (unknown.length) throw fail(`Variable inconnue : {${unknown.join("}, {")}}.`);
@@ -257,7 +264,7 @@ Deno.serve(async (req) => {
     }
     if (action === "queue.list") {
       const status = text(payload.status, 20), page = integer(payload.page ?? 1, 1, 100000), size = 50, q = searchTerm(payload.search);
-      const track = text(payload.track, 20), how = text(payload.how, 20);
+      const track = text(payload.track, 20), how = text(payload.how, 20), campagne = text(payload.campagne, 20);
       let query = db.from("yontech_prospection_messages").select(`id,siren,email,company,score,origin,status,subject,error,created_at,sent_at,data,opened_at,open_count,video_clicked_at,site_clicked_at,replied_at,scanner_at,scanner_hits,yontech_prospection_followups${status === "sent" && track === "followed" ? "!inner" : ""}(stage,status,sent_at)`, { count: "exact" });
       if (status === "queued") query = query.in("status", ["queued", "sending"]);
       else if (["sent", "failed", "skipped"].includes(status)) query = query.eq("status", status);
@@ -266,6 +273,9 @@ Deno.serve(async (req) => {
       // de recherche, ou entreprise sans site internet (annuaire RGE).
       if (how === "guess" || how === "search") query = query.like("data->>how", `${how}:%`);
       else if (how === "sanssite") query = query.eq("data->>sanssite", "1");
+      // Filtre « Campagne » : logiciel (campagne absente = logiciel) ou sites internet.
+      if (campagne === "site") query = query.eq("data->>campagne", "site");
+      else if (campagne === "logiciel") query = query.or("data->>campagne.is.null,data->>campagne.neq.site");
       if (status === "sent" && track) {
         if (track === "opened") query = query.not("opened_at", "is", null);
         else if (track === "unopened") query = query.is("opened_at", null);

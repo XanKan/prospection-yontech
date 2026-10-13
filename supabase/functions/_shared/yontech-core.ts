@@ -25,10 +25,10 @@ export const BRAND = {
 export type Vars = Record<string, string>;
 export type ProspectData = {
   entreprise?: string; prenom?: string; nom?: string; ville?: string; cp?: string;
-  metier?: string; departement?: string; effectif?: string; site?: string; tel?: string;
+  metier?: string; departement?: string; effectif?: string; site?: string; tel?: string; constat?: string;
 };
 
-export const TEMPLATE_VARIABLES = ["bonjour", "prenom", "nom", "entreprise", "ville", "metier", "departement", "effectif", "site", "video"];
+export const TEMPLATE_VARIABLES = ["bonjour", "prenom", "nom", "entreprise", "ville", "metier", "departement", "effectif", "site", "constat", "video"];
 
 export function youtubeId(url: string) {
   const match = String(url || "").match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
@@ -74,7 +74,34 @@ export function templateVars(data: ProspectData): Vars {
     effectif: clean(data.effectif, 40),
     // Site internet de l'entreprise (celui où l'adresse a été trouvée), sans protocole.
     site: clean(data.site, 120).replace(/^https?:\/\//i, "").replace(/\/$/, ""),
+    // Constat mesuré sur le site existant (« ne s'affiche pas correctement sur téléphone »), vide sinon.
+    constat: clean(data.constat, 160),
   };
+}
+
+/* ===================== Constat sur un site existant ===================== */
+
+// Observations mesurables sur la page d'accueil d'un site, formulées pour
+// suivre « le site de {entreprise} … ». Les plus parlantes d'abord. Les
+// trois premières catégories (téléphone, sécurité, ancienneté) et la lenteur
+// orientent vers la campagne « Sites internet » (refonte).
+export function siteFindings(html: string, url: string, ms?: number, now = new Date()) {
+  const out: string[] = [];
+  const head = String(html || "").slice(0, 60_000);
+  if (!/<meta[^>]+name=["']viewport["']/i.test(head)) out.push("ne s'affiche pas correctement sur téléphone");
+  if (/^http:\/\//i.test(String(url || ""))) out.push("n'est pas sécurisé (pas de cadenas https)");
+  const years = [...String(html || "").matchAll(/(?:©|&copy;|&#169;|copyright)\s*(?:\d{4}\s*[-–]\s*)?((?:19|20)\d{2})/gi)].map((m) => Number(m[1])).filter((y) => y >= 1995 && y <= now.getFullYear());
+  const last = years.length ? Math.max(...years) : 0;
+  if (last && last <= now.getFullYear() - 3) out.push(`n'a pas été mis à jour depuis ${last}`);
+  if (ms && ms > 4000) out.push("met plus de 4 secondes à s'afficher");
+  if (/wixsite\.com|jimdosite\.com|jimdofree\.com|e-monsite\.com|sitew\.com|webnode\.|weebly\.com|site123\.me|\.wordpress\.com|business\.site|\.blogspot\.|\.free\.fr\/|pagesperso-orange\.fr|monsite-orange\.fr/i.test(String(url || "") + " " + head.slice(0, 3000))) out.push("est hébergé sur une plateforme gratuite");
+  if (!/mentions?\s*l[ée]gales|mentions-legales|legal/i.test(String(html || ""))) out.push("n'affiche pas de mentions légales");
+  return out;
+}
+
+// Les constats qui justifient une refonte (les mentions légales seules, non).
+export function strongFindings(findings: string[]) {
+  return findings.filter((f) => !/mentions légales/.test(f));
 }
 
 // {variable} ou {variable|texte si vide}. Les accolades inconnues restent
@@ -331,13 +358,17 @@ export function targetKey(target: Required<Target>) {
   return JSON.stringify(["y2", target.sect, target.nafs, target.effs, target.deps, target.sansSite, target.sansSiteHisto]);
 }
 
-// Choix des modèles selon le public : un prospect sans site internet ne
-// reçoit que les modèles « sanssite » s'il en existe (sinon « tous ») ; les
-// autres reçoivent les modèles « avecsite » s'il en existe (sinon « tous »).
-export function pickTemplates<T extends { audience?: string | null }>(templates: T[], data: Record<string, unknown> | null | undefined) {
+// Choix des modèles : d'abord ceux de la campagne du prospect (« logiciel »
+// ou « site » ; à défaut, toutes campagnes), puis le public : un prospect
+// sans site internet ne reçoit que les modèles « sanssite » s'il en existe
+// (sinon « tous ») ; les autres reçoivent « avecsite » s'il en existe (sinon « tous »).
+export function pickTemplates<T extends { audience?: string | null; campagne?: string | null }>(templates: T[], data: Record<string, unknown> | null | undefined) {
+  const campagne = String((data || {}).campagne || "logiciel");
+  const own = templates.filter((t) => (t.campagne || "logiciel") === campagne);
+  const pool = own.length ? own : templates;
   const wanted = String((data || {}).sanssite || "") === "1" ? "sanssite" : "avecsite";
-  const dedicated = templates.filter((t) => (t.audience || "tous") === wanted);
-  return dedicated.length ? dedicated : templates.filter((t) => (t.audience || "tous") === "tous");
+  const dedicated = pool.filter((t) => (t.audience || "tous") === wanted);
+  return dedicated.length ? dedicated : pool.filter((t) => (t.audience || "tous") === "tous");
 }
 
 // Paramètres de l'API Recherche d'entreprises pour une unité de balayage.
@@ -409,6 +440,8 @@ export type Company = {
   association: boolean;
   // Entreprise sans site internet (annuaire RGE) et origine de la fiche (sirene, rge).
   sansSite: boolean; source: string;
+  // Campagne (« logiciel » ou « site ») et constats mesurés sur le site existant.
+  campagne: string; constats: string[];
 };
 
 // deno-lint-ignore no-explicit-any
@@ -433,7 +466,7 @@ export function normalizeCompany(r: any, now = Date.now()): Company {
     // NAF 94 (organisations associatives, syndicats, partis), 84 (administration),
     // nature juridique 7xxx (personnes morales de droit public) ou 92xx (associations).
     association: /^(94|84)/.test(naf) || !!r?.complements?.est_association || /^(7|92)/.test(String(r?.nature_juridique || "")),
-    sansSite: false, source: "sirene",
+    sansSite: false, source: "sirene", campagne: "logiciel", constats: [],
   };
 }
 
@@ -460,6 +493,8 @@ export function companyToQueueItem(c: Company, score: number) {
       metier: c.metier, departement: c.dep, effectif: c.effectif, site: c.site, tel: c.tel, how: c.how, naf: c.naf,
       // « 1 » pour une entreprise sans site internet (annuaire RGE) : modèles réservés, badge dans Envois.
       sanssite: c.sansSite ? "1" : "", source: c.source,
+      // Campagne et constat sur le site existant (le premier, pour {constat} ; tous, pour la fiche).
+      campagne: c.campagne || "logiciel", constat: c.constats[0] || "", constats: c.constats.join(" · "),
     },
   };
 }

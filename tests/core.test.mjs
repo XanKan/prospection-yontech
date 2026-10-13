@@ -7,6 +7,7 @@ import {
   BRAND, niceCompany, templateVars, renderTemplate, unknownVariables, composeEmail, classifySmtpError, retryDelaySeconds,
   normalizeTarget, sireneParams, normalizeCompany, scoreCompany, companyToQueueItem, maskEmail, youtubeId, metierFor,
   nameWords, domainCandidates, extractEmails, verifyPage, secondaryLinks, isDirectoryHost, DEFAULT_SECTIONS, SECTIONS, targetKey, pickTemplates, companyDomainOf,
+  siteFindings, strongFindings,
 } from '../supabase/functions/_shared/yontech-core.ts';
 
 // Raisons sociales SIRENE en capitales : écrites comme à la main.
@@ -162,6 +163,32 @@ company.sansSite = true; company.source = 'rge';
 assert.equal(companyToQueueItem(company, 50).data.sanssite, '1');
 assert.equal(companyToQueueItem(company, 50).data.source, 'rge');
 company.sansSite = false; company.source = 'sirene';
+
+// Campagnes : modèles de la campagne du prospect d'abord, puis public.
+const tplsC = [{ id: 'l', campagne: 'logiciel', audience: 'tous' }, { id: 's1', campagne: 'site', audience: 'sanssite' }, { id: 's2', campagne: 'site', audience: 'avecsite' }, { id: 's3', campagne: 'site', audience: 'tous' }];
+assert.deepEqual(pickTemplates(tplsC, { campagne: 'site', sanssite: '1' }).map((t) => t.id), ['s1']);
+assert.deepEqual(pickTemplates(tplsC, { campagne: 'site' }).map((t) => t.id), ['s2']);
+assert.deepEqual(pickTemplates(tplsC, { campagne: 'logiciel' }).map((t) => t.id), ['l']);
+assert.deepEqual(pickTemplates(tplsC, {}).map((t) => t.id), ['l'], 'campagne absente = logiciel');
+assert.deepEqual(pickTemplates([tplsC[0]], { campagne: 'site' }).map((t) => t.id), ['l'], 'repli sur toutes les campagnes');
+
+// Constat sur un site existant, formulé après « le site de {entreprise } ».
+const now = new Date('2026-10-13');
+assert.deepEqual(siteFindings('<html><head></head><body>© 2018 Dupont <a href="/mentions-legales">Mentions légales</a></body></html>', 'https://dupont.fr/', 800, now),
+  ["ne s'affiche pas correctement sur téléphone", "n'a pas été mis à jour depuis 2018"]);
+assert.deepEqual(siteFindings('<html><head><meta name="viewport" content="width=device-width"></head><body>© 2025 Dupont · mentions légales</body></html>', 'https://dupont.fr/', 900, now), []);
+assert.deepEqual(siteFindings('<html><head><meta name="viewport" content="x"></head><body>© 2025 Dupont · mentions légales</body></html>', 'http://dupont.fr/', 5200, now),
+  ["n'est pas sécurisé (pas de cadenas https)", "met plus de 4 secondes à s'afficher"]);
+assert.ok(siteFindings('<html><head><meta name="viewport" content="x"></head><body>mentions légales</body></html>', 'https://dupont.wixsite.com/site', 500, now).includes("est hébergé sur une plateforme gratuite"));
+assert.deepEqual(siteFindings('<html><head><meta name="viewport" content="x"></head><body>Bonjour</body></html>', 'https://dupont.fr/', 500, now), ["n'affiche pas de mentions légales"]);
+assert.deepEqual(strongFindings(["n'affiche pas de mentions légales"]), [], 'les mentions légales seules ne justifient pas une refonte');
+assert.equal(strongFindings(["ne s'affiche pas correctement sur téléphone", "n'affiche pas de mentions légales"]).length, 1);
+company.constats = ["ne s'affiche pas correctement sur téléphone", "n'a pas été mis à jour depuis 2018"]; company.campagne = 'site';
+assert.equal(companyToQueueItem(company, 50).data.constat, "ne s'affiche pas correctement sur téléphone");
+assert.equal(companyToQueueItem(company, 50).data.campagne, 'site');
+assert.equal(renderTemplate('le site de {entreprise} {constat|peut faire mieux}', templateVars(companyToQueueItem(company, 50).data)), "le site de Dupont Meca ne s'affiche pas correctement sur téléphone", 'enseigne avant raison sociale');
+assert.equal(renderTemplate('le site de {entreprise} {constat|peut faire mieux}', templateVars({ entreprise: 'X' })), 'le site de X peut faire mieux');
+company.constats = []; company.campagne = 'logiciel';
 
 // Domaine d'entreprise dans une adresse e-mail : indice d'un site existant.
 assert.equal(companyDomainOf('audrey.billebaud@cegelec.com'), 'cegelec.com');

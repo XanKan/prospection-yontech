@@ -3,7 +3,7 @@ import {
 } from "./yontech-core.ts";
 import { discoverMany, type Discovery, fetchPage } from "./yontech-web.ts";
 import { companyForSiren, postalPrefixes, rgeSansSitePage } from "./yontech-rge.ts";
-import { companyDomainOf } from "./yontech-core.ts";
+import { companyDomainOf, siteFindings, strongFindings } from "./yontech-core.ts";
 
 // Pilote automatique : complète la file avec de nouvelles entreprises de la
 // base SIRENE (API Recherche d'entreprises, tous secteurs) correspondant au
@@ -124,14 +124,14 @@ export async function runSourcing(options: {
         if (target.deps.length && !target.deps.includes(c.dep)) { rr.outOfZone++; continue; }
         if (c.association) continue;
         rr.companies++;
-        c.email = line.email; c.tel = line.tel; c.sansSite = true; c.source = "rge"; c.how = "rge:sanssite"; c.ownDomain = false;
+        c.email = line.email; c.tel = line.tel; c.sansSite = true; c.source = "rge"; c.how = "rge:sanssite"; c.ownDomain = false; c.campagne = "site";
         // L'annuaire ne mentionne pas de site, mais l'adresse e-mail est sur un
         // domaine d'entreprise : si ce domaine répond sur le web, l'entreprise a
         // bien un site (fiche RGE incomplète) et reçoit les messages « avec site ».
         const domain = companyDomainOf(c.email);
         if (domain && Date.now() < rgeDeadline) {
           const home = await fetchPage(`https://${domain}/`, 4000) || await fetchPage(`https://www.${domain}/`, 4000);
-          if (home) { c.site = `https://${home.host.replace(/^www\./, "")}`; c.sansSite = false; c.how = "rge:site"; c.ownDomain = true; }
+          if (home) { c.site = `https://${home.host.replace(/^www\./, "")}`; c.sansSite = false; c.how = "rge:site"; c.ownDomain = true; c.constats = siteFindings(home.html, home.url, home.ms); }
         }
         scannedRows.push({ siren: c.siren, site: c.site, email: c.email, how: c.how });
         if (options.requireFirstName && !c.prenom) { rr.noFirstName++; continue; }
@@ -198,7 +198,12 @@ export async function runSourcing(options: {
     for (const c of candidates) {
       const d: Discovery | null | undefined = results.get(c.siren);
       if (d === undefined) continue; // non traité (délai) : il sera repris au prochain passage
-      if (d) { report.sites++; c.site = d.site; c.how = d.how; c.ownDomain = d.own; if (d.email) { c.email = d.email; withEmail.push(c); } }
+      if (d) {
+        report.sites++; c.site = d.site; c.how = d.how; c.ownDomain = d.own; c.constats = d.findings || [];
+        // Un site visiblement dépassé (téléphone, https, ancienneté, lenteur) : campagne « Sites internet » (refonte).
+        c.campagne = strongFindings(c.constats).length ? "site" : "logiciel";
+        if (d.email) { c.email = d.email; withEmail.push(c); }
+      }
       scannedRows.push({ siren: c.siren, site: d?.site || "", email: d?.email || "", how: d?.how || "" });
     }
     report.withEmail += withEmail.length;

@@ -1,5 +1,5 @@
 import {
-  type Company, domainCandidates, extractEmails, isDirectoryHost, secondaryLinks, verifyPage,
+  type Company, domainCandidates, extractEmails, isDirectoryHost, secondaryLinks, siteFindings, verifyPage,
 } from "./yontech-core.ts";
 
 // Découverte du site internet et de l'adresse e-mail d'une entreprise de la
@@ -18,12 +18,13 @@ import {
 const USER_AGENT = "Mozilla/5.0 (compatible; YontechBot/1.0; +https://yontech.fr) AppleWebKit/537.36 Chrome/124 Safari/537.36";
 const MAX_BYTES = 450_000;
 
-export type Page = { url: string; host: string; html: string };
+export type Page = { url: string; host: string; html: string; ms: number };
 
 // Télécharge une page HTML avec un délai maximum et une taille plafonnée.
 export async function fetchPage(url: string, timeoutMs = 6000): Promise<Page | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const started = Date.now();
   try {
     const response = await fetch(url, {
       signal: controller.signal, redirect: "follow",
@@ -51,7 +52,7 @@ export async function fetchPage(url: string, timeoutMs = 6000): Promise<Page | n
     const html = new TextDecoder("utf-8", { fatal: false }).decode(all.slice(0, MAX_BYTES))
       .replace(/<script\b(?![^>]*ld\+json)[^>]*>[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<svg[\s\S]*?<\/svg>|<!--[\s\S]*?-->/gi, " ");
     const final = new URL(response.url || url);
-    return { url: final.toString(), host: final.hostname.toLowerCase(), html };
+    return { url: final.toString(), host: final.hostname.toLowerCase(), html, ms: Date.now() - started };
   } catch {
     return null;
   } finally {
@@ -59,7 +60,7 @@ export async function fetchPage(url: string, timeoutMs = 6000): Promise<Page | n
   }
 }
 
-export type Discovery = { site: string; host: string; how: string; email: string; own: boolean; emails: string[] };
+export type Discovery = { site: string; host: string; how: string; email: string; own: boolean; emails: string[]; findings: string[] };
 
 // Examine un site candidat : vérifie qu'il appartient bien à l'entreprise puis
 // cherche une adresse. `how` est le mode de découverte (« guess » ou « search »).
@@ -83,7 +84,11 @@ async function inspectSite(url: string, c: Company, how: string, deadline: numbe
   const ranked = pages.flatMap((p) => extractEmails(p.html, host, { prenom: c.prenom, nom: c.nomDir }));
   const seen = new Set<string>();
   const unique = ranked.filter((e) => !seen.has(e.email) && seen.add(e.email)).sort((a, b) => b.rank - a.rank);
-  return { site: `https://${host}`, host, how: `${how}:${verified}`, email: unique[0]?.email || "", own: !!unique[0]?.own, emails: unique.slice(0, 5).map((e) => e.email) };
+  return {
+    site: `https://${host}`, host, how: `${how}:${verified}`, email: unique[0]?.email || "", own: !!unique[0]?.own, emails: unique.slice(0, 5).map((e) => e.email),
+    // Constats sur la page d'accueil (téléphone, https, ancienneté, lenteur…), pour la campagne « Sites internet ».
+    findings: siteFindings(home.html, home.url, home.ms),
+  };
 }
 
 type SearchHit = { url: string; title: string };

@@ -14,7 +14,7 @@ export async function sendNext(db: SupabaseClient) {
   if (claim?.state !== "claimed") return claim;
   const message = claim.message, settings = claim.settings as SenderSettings;
   if (claim.kind === "followup") return sendFollowup(db, claim);
-  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body,audience").eq("active", true).eq("kind", "initial");
+  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body,audience,campagne").eq("active", true).eq("kind", "initial");
   if (templateError) throw templateError;
   // Public du modèle : un prospect sans site internet reçoit les modèles
   // « Sans site internet » s'il en existe, les autres « Avec site » ou « Toutes ».
@@ -44,7 +44,7 @@ export async function sendNext(db: SupabaseClient) {
 async function sendFollowup(db: SupabaseClient, claim: { followup: { id: string; stage: number }; message: Record<string, unknown>; settings: Record<string, unknown> }) {
   const f = claim.followup, message = claim.message, settings = claim.settings as SenderSettings;
   const kind = f.stage === 2 ? "relance2" : "relance1";
-  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body,audience").eq("active", true).eq("kind", kind);
+  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body,audience,campagne").eq("active", true).eq("kind", kind);
   if (templateError) throw templateError;
   const pool = pickTemplates(templates || [], (message.data as Record<string, unknown>) || {});
   if (!pool.length) {

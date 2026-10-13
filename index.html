@@ -460,6 +460,14 @@
           </div>
         </div>
 
+        <div class="card" style="margin-top:16px">
+          <div class="card-h"><h2>Les deux campagnes</h2><span class="sub">le quota du jour est partagé entre elles (Réglages → Cadence)</span></div>
+          <div class="card-b"><div class="tscroll"><table id="campTable">
+            <thead><tr><th>Campagne</th><th class="num">En réserve</th><th class="num">Aujourd'hui</th><th class="num">Envoyés</th><th class="num">Ouverts</th><th class="num">Clics</th><th class="num">Réponses</th><th class="num">Échecs</th></tr></thead>
+            <tbody id="campBody"></tbody>
+          </table></div></div>
+        </div>
+
         <div class="grid2">
           <div class="card">
             <div class="card-h"><h2>Derniers envois</h2><div class="right"><button type="button" class="b b-out b-xs" data-go="log">Tout voir</button></div></div>
@@ -559,6 +567,8 @@
                   <div class="fld"><label for="tName">Nom interne</label><input class="inp" id="tName" maxlength="120" placeholder="ex. Application sur-mesure — industrie"></div>
                   <div class="fld"><label for="tKind">Type</label><select class="inp" id="tKind"><option value="initial">Premier contact</option><option value="relance1">Relance 1</option><option value="relance2">Relance 2 (dernière)</option></select>
                     <p class="help">Une relance part dans le fil du premier message, en « Re : », aux destinataires qui n'ont pas répondu. Délais et conditions dans Réglages.</p></div>
+                  <div class="fld"><label for="tCampagne">Campagne</label><select class="inp" id="tCampagne"><option value="logiciel">Logiciel et applications</option><option value="site">Sites internet</option></select>
+                    <p class="help">Chaque prospect appartient à une campagne : « Sites internet » pour les entreprises sans site ou au site dépassé, « Logiciel » pour les autres. Un prospect ne reçoit que les modèles de sa campagne.</p></div>
                   <div class="fld"><label for="tAudience">Public</label><select class="inp" id="tAudience"><option value="tous">Toutes les entreprises</option><option value="sanssite">Sans site internet (annuaire RGE)</option><option value="avecsite">Avec site internet</option></select>
                     <p class="help">Un prospect sans site internet ne reçoit que les modèles « Sans site internet » s'il en existe ; les autres reçoivent « Avec site internet » s'il en existe, sinon « Toutes ».</p></div>
                   <div class="fld"><label for="tSubject">Objet</label><input class="inp" id="tSubject" maxlength="200"></div>
@@ -602,6 +612,11 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <input type="search" id="lq" placeholder="Entreprise ou e-mail…">
             </div>
+            <select class="inp" id="lCamp" style="width:auto">
+              <option value="">Campagne : toutes</option>
+              <option value="logiciel">Logiciel et applications</option>
+              <option value="site">Sites internet</option>
+            </select>
             <select class="inp" id="lHow" style="width:auto">
               <option value="">Découverte : toutes</option>
               <option value="guess">Site deviné depuis le nom</option>
@@ -729,6 +744,9 @@
               <div class="fields">
                 <div class="fld"><label for="sCap">Quota maximum par jour</label><input class="inp" type="number" id="sCap" min="1" max="3000">
                   <p class="help">Hostinger accepte jusqu'à 3 000 e-mails par jour. Plafond une fois la montée en charge terminée.</p></div>
+                <div class="fld"><label for="sShare">Part des envois pour la campagne Sites internet</label>
+                  <div class="inline"><input class="inp" type="number" id="sShare" min="0" max="100" step="1"> % du quota du jour</div>
+                  <p class="help">Le reste va à la campagne Logiciel. L'ordre d'envoi alterne pour tenir ce partage au fil de la journée ; si une campagne n'a plus de prospects, l'autre prend sa place.</p></div>
                 <div class="fld"><label>Montée en charge</label>
                   <label class="swi" style="margin:4px 0 10px"><input type="checkbox" id="sWarm"><i></i> Augmenter le quota progressivement</label>
                   <div class="inline">départ <input class="inp" type="number" id="sWarmStart" min="1" max="3000"> + <input class="inp" type="number" id="sWarmStep" min="0" max="1000"> par jour d'envoi</div></div>
@@ -952,8 +970,8 @@ document.addEventListener("click", ev => {
 /* ============================================================
    PERSONNALISATION — miroir de supabase/functions/_shared/yontech-core.ts
    ============================================================ */
-const VARS = ["prenom", "entreprise", "ville", "metier", "site", "video", "bonjour", "nom", "departement", "effectif"];
-const VAR_HELP = { bonjour:"« Bonjour Jean », ou « Bonjour » si le prénom est inconnu", prenom:"prénom du dirigeant", nom:"nom du dirigeant", entreprise:"nom de l'entreprise", ville:"ville du siège", metier:"activité (restauration, commerce de gros, fabrication de produits métalliques…) — écrivez {metier|votre secteur} pour prévoir un repli", site:"site internet de l'entreprise, où l'adresse a été trouvée (dupont-mecanique.fr)", departement:"n° de département", effectif:"tranche d'effectif", video:"emplacement de la vidéo, seul sur sa ligne (vide = pas de vidéo)" };
+const VARS = ["prenom", "entreprise", "ville", "metier", "site", "constat", "video", "bonjour", "nom", "departement", "effectif"];
+const VAR_HELP = { bonjour:"« Bonjour Jean », ou « Bonjour » si le prénom est inconnu", prenom:"prénom du dirigeant", nom:"nom du dirigeant", entreprise:"nom de l'entreprise", ville:"ville du siège", metier:"activité (restauration, commerce de gros, fabrication de produits métalliques…) — écrivez {metier|votre secteur} pour prévoir un repli", site:"site internet de l'entreprise, où l'adresse a été trouvée (dupont-mecanique.fr)", constat:"constat mesuré sur le site existant, à placer après « le site de {entreprise } » : « ne s'affiche pas correctement sur téléphone », « n'est pas sécurisé (pas de cadenas https) », « n'a pas été mis à jour depuis 2019 »… — écrivez {constat|peut faire mieux} pour prévoir un repli", departement:"n° de département", effectif:"tranche d'effectif", video:"emplacement de la vidéo, seul sur sa ligne (vide = pas de vidéo)" };
 const UPPER_WORDS = new Set(["SARL","SAS","SASU","EURL","SA","SNC","SCI","SCOP","EI","EIRL","SC","GIE","SELARL","SCP","SCA","BTP","TP","VRD","CVC","ETS","RH","IT","ERP","CRM"]);
 const SMALL_WORDS = new Set(["de","du","des","la","le","les","et","en","d","l","a","au","aux","sur"]);
 const clean = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max || 200);
@@ -973,7 +991,7 @@ function templateVars(d){
   const prenom = capitalName(d.prenom).split(" ")[0] || "";
   return { bonjour: prenom ? "Bonjour " + prenom : "Bonjour", prenom, nom: capitalName(d.nom), entreprise: niceCompany(d.entreprise),
     ville: capitalName(d.ville), metier: clean(d.metier, 120), departement: clean(d.departement, 4), effectif: clean(d.effectif, 40),
-    site: clean(d.site, 120).replace(/^https?:\/\//i, "").replace(/\/$/, "") };
+    site: clean(d.site, 120).replace(/^https?:\/\//i, "").replace(/\/$/, ""), constat: clean(d.constat, 160) };
 }
 function renderTpl(t, v){
   return String(t || "").replace(/\{([a-z_]+)(?:\|([^{}]*))?\}/gi, (m, name, fb) => {
@@ -1156,6 +1174,11 @@ function renderState(){
     '<p class="note">Aucun envoi pour l\'instant.</p>';
   const chTitle = $("chDays").closest(".card") && $("chDays").closest(".card").querySelector(".card-h h2");
   if (chTitle) chTitle.textContent = "Envois par jour · " + fmt(chTotal) + " au total" + (days.length ? " depuis le " + esc(days[0].lab) : "");
+
+  // Les deux campagnes
+  const camps = state.campaigns || {};
+  const campRow = (key, label) => { const c = camps[key] || {}; return "<tr><td><b>" + label + "</b></td><td class=\"num\">" + fmt(c.queued || 0) + "</td><td class=\"num\">" + fmt(c.sent_today || 0) + "</td><td class=\"num\">" + fmt(c.sent || 0) + "</td><td class=\"num\">" + fmt(c.opened || 0) + "</td><td class=\"num\">" + fmt(c.clicked || 0) + "</td><td class=\"num\">" + fmt(c.replied || 0) + "</td><td class=\"num\">" + fmt(c.failed || 0) + "</td></tr>"; };
+  $("campBody").innerHTML = campRow("logiciel", "Logiciel et applications") + campRow("site", "Sites internet · " + (s.site_share == null ? 33 : s.site_share) + " % du quota");
 
   // Derniers envois
   $("recent").innerHTML = state.recent.length
@@ -1444,7 +1467,7 @@ document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeModal
    MESSAGES (modèles)
    ============================================================ */
 let tplId = null, lastField = "tBody";
-const SAMPLE = { entreprise: "DUPONT MECANIQUE", prenom: "Jean", nom: "Dupont", ville: "La Roche-sur-Yon", cp: "85000", metier: "fabrication de produits métalliques", departement: "85", effectif: "20 à 49", site: "dupont-mecanique.fr" };
+const SAMPLE = { entreprise: "DUPONT MECANIQUE", prenom: "Jean", nom: "Dupont", ville: "La Roche-sur-Yon", cp: "85000", metier: "fabrication de produits métalliques", departement: "85", effectif: "20 à 49", site: "dupont-mecanique.fr", constat: "ne s'affiche pas correctement sur téléphone", campagne: "site" };
 
 $("varChips").innerHTML = VARS.map(v => '<button type="button" data-var="' + v + '" title="' + esc(VAR_HELP[v]) + '">{' + v + "}</button>").join("");
 ["tSubject", "tBody"].forEach(id => $(id).addEventListener("focus", () => { lastField = id; }));
@@ -1465,7 +1488,7 @@ function renderTemplates(){
   if (tplId && !list.some(t => t.id === tplId)) tplId = null;
   if (tplId === null && list.length && !$("tName").dataset.dirty) tplId = list[0].id;
   $("tplList").innerHTML = list.map(t =>
-    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + (AUDIENCE[t.audience] ? ' <code class="k">' + AUDIENCE[t.audience] + "</code>" : "") + "</b><span>" + esc(KIND[t.kind] ? "Re : objet du premier message" : t.subject) + "</span></button>"
+    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + (AUDIENCE[t.audience] ? ' <code class="k">' + AUDIENCE[t.audience] + "</code>" : "") + (t.campagne === "site" ? ' <code class="k" style="background:var(--blue-soft);color:var(--blue)">sites</code>' : "") + "</b><span>" + esc(KIND[t.kind] ? "Re : objet du premier message" : t.subject) + "</span></button>"
   ).join("") || '<p class="note" style="margin-bottom:10px">Aucun modèle pour l\'instant.</p>';
   // Une modification en cours n'est jamais écrasée par un rafraîchissement.
   if (!$("tName").dataset.dirty) fillTemplate(list.find(x => x.id === tplId) || { name: "", subject: "", body: "", active: true });
@@ -1488,6 +1511,7 @@ async function loadSamples(){
 }
 const KIND = { relance1: "relance 1", relance2: "relance 2" };
 const AUDIENCE = { sanssite: "sans site", avecsite: "avec site" };
+const CAMPAGNE = { logiciel: "Logiciel", site: "Sites internet" };
 // Une relance part toujours en « Re : » sur l'objet du premier message : son objet propre ne sert pas.
 function syncKind(){
   const relance = $("tKind").value !== "initial";
@@ -1500,6 +1524,7 @@ function fillTemplate(t){
   $("tActive").checked = t.active !== false;
   $("tKind").value = t.kind || "initial"; syncKind();
   $("tAudience").value = t.audience || "tous";
+  $("tCampagne").value = t.campagne || "logiciel";
   $("bTplDel").hidden = !t.id;
   $("tplMsg").textContent = "";
   delete $("tName").dataset.dirty;
@@ -1514,6 +1539,7 @@ function renderPreview(){
 ["tName", "tSubject", "tBody"].forEach(id => $(id).addEventListener("input", () => { $("tName").dataset.dirty = "1"; renderPreview(); }));
 $("tKind").addEventListener("change", () => { $("tName").dataset.dirty = "1"; syncKind(); renderPreview(); });
 $("tAudience").addEventListener("change", () => { $("tName").dataset.dirty = "1"; });
+$("tCampagne").addEventListener("change", () => { $("tName").dataset.dirty = "1"; });
 $("tplSample").addEventListener("change", renderPreview);
 $("tplList").addEventListener("click", ev => {
   const b = ev.target.closest("[data-tpl]");
@@ -1525,7 +1551,7 @@ $("tplList").addEventListener("click", ev => {
 $("bTplNew").addEventListener("click", () => {
   tplId = "";
   document.querySelectorAll(".tpl-item").forEach(x => x.classList.remove("on"));
-  fillTemplate({ name: "", subject: "{entreprise} : ", body: "{bonjour},\n\n\n\nRépondez simplement « ok » et nous vous rappelons.\n\nBien cordialement,", active: true, kind: "initial", audience: "tous" });
+  fillTemplate({ name: "", subject: "{entreprise} : ", body: "{bonjour},\n\n\n\nRépondez simplement « ok » et nous vous rappelons.\n\nBien cordialement,", active: true, kind: "initial", audience: "tous", campagne: "logiciel" });
   $("tName").dataset.dirty = "1";
   renderPreview();
   $("tName").focus();
@@ -1534,7 +1560,7 @@ $("bTplSave").addEventListener("click", async ev => {
   const btn = ev.currentTarget;
   busy(btn, true, "Enregistrement…");
   try {
-    const { template } = await api("templates.save", { id: tplId || undefined, name: $("tName").value, subject: $("tSubject").value, body: $("tBody").value, active: $("tActive").checked, kind: $("tKind").value, audience: $("tAudience").value });
+    const { template } = await api("templates.save", { id: tplId || undefined, name: $("tName").value, subject: $("tSubject").value, body: $("tBody").value, active: $("tActive").checked, kind: $("tKind").value, audience: $("tAudience").value, campagne: $("tCampagne").value });
     tplId = template.id;
     delete $("tName").dataset.dirty;
     await loadState();
@@ -1589,11 +1615,12 @@ function trackBadges(m){
 function signalBadge(m){
   const d = m.data || {};
   const how = String(d.how || "");
-  if (d.sanssite === "1") return ' <span class="badge open" title="Entreprise sans site internet (annuaire RGE de l\'ADEME) : reçoit les modèles « Sans site internet »">Sans site</span>';
-  if (!how) return "";
+  const camp = d.campagne === "site" ? ' <span class="badge sending" title="Campagne Sites internet' + (d.constat ? " : le site " + esc(d.constat) : "") + '">Sites</span>' : "";
+  if (d.sanssite === "1") return camp + ' <span class="badge open" title="Entreprise sans site internet (annuaire RGE de l\'ADEME) : reçoit les modèles « Sans site internet »">Sans site</span>';
+  if (!how) return camp;
   const site = String(d.site || "").replace(/^https?:\/\//, "");
   const proof = /siren/.test(how) ? "SIREN sur le site" : "nom et ville sur le site";
-  return ' <span class="badge ' + (/^search/.test(how) ? "open" : "video") + '" title="' + esc(site) + " · " + proof + '">' + (/^search/.test(how) ? "Recherche web" : "Site deviné") + "</span>";
+  return camp + ' <span class="badge ' + (/^search/.test(how) ? "open" : "video") + '" title="' + esc(site) + " · " + proof + '">' + (/^search/.test(how) ? "Recherche web" : /^rge/.test(how) ? "Site (RGE)" : "Site deviné") + "</span>";
 }
 function trackState(m){
   const SUPPRESSED = { desinscription: "Désinscrit", rebond: "Rebond", manuel: "Exclu", deja_contacte: "Exclu" };
@@ -1619,7 +1646,7 @@ async function loadLog(){
   try {
     const data = LOG.status === "followups"
       ? await api("followups.list", { page: LOG.page, search: $("lq").value, stage: $("lStage").value })
-      : await api("queue.list", { status: LOG.status, page: LOG.page, search: $("lq").value, track: LOG.status === "sent" ? $("lTrack").value : "", how: $("lHow").value });
+      : await api("queue.list", { status: LOG.status, page: LOG.page, search: $("lq").value, track: LOG.status === "sent" ? $("lTrack").value : "", how: $("lHow").value, campagne: $("lCamp").value });
     if (seq !== logSeq) return;
     LOG.items = data.items; LOG.total = data.total; LOG.sel.clear();
     renderLog();
@@ -1630,13 +1657,14 @@ function renderLog(){
   $("lDateH").textContent = LOG.status === "sent" ? "Envoyé le" : LOG.status === "followups" ? "Relance envoyée le" : LOG.status === "all" ? "Envoyé / ajouté le" : "Ajouté le";
   $("lTrack").hidden = LOG.status !== "sent";
   $("lHow").hidden = LOG.status === "followups";
+  $("lCamp").hidden = LOG.status === "followups";
   $("lStage").hidden = LOG.status !== "followups";
   $("bLogRetry").hidden = LOG.status !== "failed";
   $("bLogRemove").hidden = LOG.status === "sent" || LOG.status === "all" || LOG.status === "followups";
   $("bLogRemove").textContent = LOG.status === "queued" ? "Retirer de la file" : "Supprimer";
   const pages = Math.max(1, Math.ceil(LOG.total / 50));
   $("lPage").textContent = "Page " + LOG.page + " / " + pages + " · " + fmt(LOG.total) + " ligne(s)";
-  const filtered = !!($("lq").value || (!$("lTrack").hidden && $("lTrack").value) || (!$("lHow").hidden && $("lHow").value) || (!$("lStage").hidden && $("lStage").value));
+  const filtered = !!($("lq").value || (!$("lTrack").hidden && $("lTrack").value) || (!$("lHow").hidden && $("lHow").value) || (!$("lCamp").hidden && $("lCamp").value) || (!$("lStage").hidden && $("lStage").value));
   $("lTotal").textContent = fmt(LOG.total) + (filtered ? " filtré(s)" : "");
   $("lTotal").style.background = filtered ? "var(--violet)" : "";
   $("lTotal").style.color = filtered ? "#fff" : "";
@@ -1676,6 +1704,7 @@ $("logTabs").addEventListener("click", ev => { const t = ev.target.closest("[dat
 $("lq").addEventListener("input", () => { clearTimeout(logT); logT = setTimeout(() => { LOG.page = 1; loadLog(); }, 300); });
 $("lTrack").addEventListener("change", () => { LOG.page = 1; loadLog(); });
 $("lHow").addEventListener("change", () => { LOG.page = 1; loadLog(); });
+$("lCamp").addEventListener("change", () => { LOG.page = 1; loadLog(); });
 $("lStage").addEventListener("change", () => { LOG.page = 1; loadLog(); });
 $("lPrev").addEventListener("click", () => { LOG.page--; loadLog(); });
 $("lNext").addEventListener("click", () => { LOG.page++; loadLog(); });
@@ -1710,6 +1739,8 @@ async function openMessage(id){
         "<div><dt>Site internet</dt><dd>" + (d.sanssite === "1" ? "<b>aucun</b> <span class=\"muted\">(annuaire RGE de l'ADEME, e-mail déclaré par l'entreprise)</span>" : d.site ? '<a href="' + esc(d.site) + '" target="_blank" rel="noopener">' + esc(String(d.site).replace(/^https?:\/\//, "")) + "</a>" + (d.how ? ' <span class="muted">(' + (/^search/.test(d.how) ? "moteur de recherche" : "domaine deviné") + ", " + (/siren/.test(d.how) ? "SIREN vérifié" : "nom et ville vérifiés") + ")</span>" : "") : "—") + "</dd></div>" +
         "<div><dt>SIREN</dt><dd>" + (m.siren ? '<a href="https://annuaire-entreprises.data.gouv.fr/entreprise/' + esc(m.siren) + '" target="_blank" rel="noopener">' + esc(m.siren) + "</a>" : "—") + "</dd></div>" +
         "<div><dt>Origine</dt><dd>" + esc(ORIGIN[m.origin] || m.origin) + (m.score != null ? " · score " + m.score : "") + "</dd></div>" +
+        "<div><dt>Campagne</dt><dd>" + (d.campagne === "site" ? "Sites internet" : "Logiciel et applications") + "</dd></div>" +
+        (d.constats ? "<div style=\"grid-column:1/-1\"><dt>Constat sur le site</dt><dd>le site " + esc(d.constats) + "</dd></div>" : "") +
         (d.tel ? "<div><dt>Téléphone</dt><dd>" + esc(d.tel) + "</dd></div>" : "") +
         (m.status === "sent" ? "<div><dt>Suivi</dt><dd>" + ([
           m.opened_at ? "ouvert le " + dateTimeFr(m.opened_at) + (m.open_count > 1 ? " (" + m.open_count + "×)" : "") : "",
@@ -1805,7 +1836,7 @@ function fillSettings(){
   const s = state.settings;
   $("sName").value = s.sender_name || ""; $("sEmail").value = s.sender_email || ""; $("sReply").value = s.reply_to || "";
   $("sSig").value = s.signature || ""; $("sFooter").value = s.footer_identity || ""; $("sVideo").value = s.video_url || "";
-  $("sCap").value = s.daily_cap; $("sWarm").checked = !!s.warmup_enabled; $("sWarmStart").value = s.warmup_start; $("sWarmStep").value = s.warmup_step;
+  $("sCap").value = s.daily_cap; $("sShare").value = s.site_share == null ? 33 : s.site_share; $("sWarm").checked = !!s.warmup_enabled; $("sWarmStart").value = s.warmup_start; $("sWarmStep").value = s.warmup_step;
   $("sWinStart").value = hm(s.window_start); $("sWinEnd").value = hm(s.window_end);
   $("sGapMin").value = s.min_gap_seconds; $("sGapMax").value = s.max_gap_seconds;
   $("sErr").value = s.max_consecutive_errors;
@@ -1843,7 +1874,7 @@ $("setForm").addEventListener("submit", async ev => {
   const payload = {
     sender_name: $("sName").value, sender_email: $("sEmail").value, reply_to: $("sReply").value,
     signature: $("sSig").value, footer_identity: $("sFooter").value, video_url: $("sVideo").value.trim(),
-    daily_cap: $("sCap").value, warmup_enabled: $("sWarm").checked, warmup_start: $("sWarmStart").value, warmup_step: $("sWarmStep").value,
+    daily_cap: $("sCap").value, site_share: $("sShare").value, warmup_enabled: $("sWarm").checked, warmup_start: $("sWarmStart").value, warmup_step: $("sWarmStep").value,
     window_start: $("sWinStart").value, window_end: $("sWinEnd").value, send_days: days,
     min_gap_seconds: Math.round(Number($("sGapMin").value)), max_gap_seconds: Math.round(Number($("sGapMax").value)),
     max_consecutive_errors: $("sErr").value,
@@ -1882,6 +1913,8 @@ function openHelp(topic){
     '<p class="note">Chaque entreprise ne reçoit <b>qu\'un seul message</b>, jamais deux, même si elle réapparaît dans une recherche ; puis au plus deux relances si vous les activez. Les réponses arrivent directement dans votre boîte mail.</p>' +
     '<p class="sect-t" style="margin-top:20px">Trouver les adresses</p>' +
     '<p class="note">La base SIRENE ne publie aucune coordonnée. L\'automate <b>devine le site</b> de l\'entreprise à partir de son nom (dupont-mecanique.fr, dupontmecanique.com…) et, si une clé est configurée, l\'<b>interroge un moteur de recherche</b>. Un site n\'est retenu que s\'il porte le SIREN ou le SIRET de l\'entreprise (mentions légales) ou son nom avec sa ville. L\'adresse est lue sur la page d\'accueil, la page contact ou les mentions légales : celle du dirigeant d\'abord, sinon contact@, info@… sur le domaine de l\'entreprise de préférence. Comptez environ une adresse pour cinq entreprises ; la recherche tourne jour et nuit, l\'envoi aux heures de bureau.</p>' +
+    '<p class="sect-t" style="margin-top:20px">Les deux campagnes</p>' +
+    '<p class="note"><b>Logiciel et applications</b> pour les entreprises dont le site est en bon état, <b>Sites internet</b> pour celles qui n\'ont pas de site ou dont le site est visiblement dépassé : pas de version téléphone, pas de https, pas mis à jour depuis plus de trois ans, plus de 4 secondes à s\'afficher, hébergé sur une plateforme gratuite. Ce constat est mesuré pendant la découverte et disponible dans les modèles avec {constat}. Le quota du jour est partagé entre les deux campagnes (Réglages).</p>' +
     '<p class="sect-t" style="margin-top:20px">Les entreprises sans site internet</p>' +
     '<p class="note">La base SIRENE ne dit pas si une entreprise a un site. L\'annuaire <b>RGE de l\'ADEME</b> (bâtiment, Licence Ouverte) donne l\'e-mail déclaré par chaque entreprise qualifiée et son site internet quand elle en a un : celles qui n\'en ont pas sont ajoutées à la réserve avec le badge « Sans site », quelle que soit leur taille, et reçoivent uniquement les modèles dont le public est « Sans site internet ».</p>' +
     '<p class="sect-t" style="margin-top:20px">La cadence et la réputation de yontech.fr</p>' +
