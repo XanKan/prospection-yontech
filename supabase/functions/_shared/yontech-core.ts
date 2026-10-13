@@ -133,6 +133,8 @@ export function textToHtml(text: string, tracking?: Tracking) {
 export type ComposeInput = {
   subject: string; body: string; signature?: string; footerIdentity?: string;
   unsubscribeUrl: string; vars: Vars; videoUrl?: string; tracking?: Tracking; logoUrl?: string;
+  // Origine de la fiche (« sirene » ou « rge ») : change la mention légale.
+  source?: string;
 };
 
 function videoBlock(url: string, tracking?: Tracking) {
@@ -161,8 +163,10 @@ function signatureHtml(signature: string, tracking?: Tracking, logoUrl?: string)
 }
 
 // Mention d'origine des données, obligatoire en prospection B2B : base
-// SIRENE (INSEE) pour l'entreprise, site internet de l'entreprise pour l'adresse.
-export function dataNotice(company: string) {
+// SIRENE (INSEE) pour l'entreprise, puis site internet de l'entreprise pour
+// l'adresse, ou annuaire RGE de l'ADEME pour les entreprises sans site.
+export function dataNotice(company: string, source?: string) {
+  if (source === "rge") return `Vous recevez ce message car ${company} figure dans l'annuaire public des entreprises qualifiées RGE (ADEME, Licence Ouverte) et dans le répertoire des entreprises (base SIRENE de l'INSEE).`;
   return `Vous recevez ce message car ${company} figure dans le répertoire public des entreprises (base SIRENE de l'INSEE) et publie ses coordonnées professionnelles sur son site internet.`;
 }
 
@@ -178,7 +182,7 @@ export function composeEmail(input: ComposeInput) {
   const video = input.videoUrl ? videoBlock(input.videoUrl, tracking) : null;
   const signature = String(input.signature ?? "").replace(/\r\n/g, "\n").trim();
   const company = input.vars.entreprise || "votre entreprise";
-  const notice = `${dataNotice(company)} Pour ne plus recevoir de message de notre part : ${input.unsubscribeUrl}`;
+  const notice = `${dataNotice(company, input.source)} Pour ne plus recevoir de message de notre part : ${input.unsubscribeUrl}`;
   const identity = clean(input.footerIdentity, 300);
   const text = [before, video?.text, after, signature, "--", notice + (identity ? `\n${identity}` : "")].filter(Boolean).join("\n\n");
   // Pixel d'ouverture, puis lien piège invisible : un filtre de sécurité qui
@@ -191,7 +195,7 @@ export function composeEmail(input: ComposeInput) {
   const html = `<div style="font:15px/1.6 Arial,Helvetica,sans-serif;color:#1f2030;max-width:640px">${textToHtml(before, tracking)}` +
     (video ? video.html : "") + (after ? textToHtml(after, tracking) : "") + signatureHtml(signature, tracking, logoUrl) +
     `<p style="margin:28px 0 0;padding-top:12px;border-top:1px solid #e5e5ef;font-size:12px;line-height:1.5;color:#8a8ca0">` +
-    `${htmlEscape(dataNotice(company))} ` +
+    `${htmlEscape(dataNotice(company, input.source))} ` +
     `<a href="${htmlEscape(input.unsubscribeUrl)}" style="color:#8a8ca0">Ne plus recevoir de message</a>.` +
     (identity ? `<br>${htmlEscape(identity)}` : "") + `</p>${pixel}</div>`;
   return { subject, text, html, body };
@@ -300,7 +304,7 @@ export function metierFor(naf: string) {
   return NAF_DIVISION[String(naf || "").slice(0, 2)] || "";
 }
 
-export type Target = { sect?: string[]; nafs?: string[]; effs?: string[]; deps?: string[]; guess?: boolean; search?: boolean };
+export type Target = { sect?: string[]; nafs?: string[]; effs?: string[]; deps?: string[]; guess?: boolean; search?: boolean; sansSite?: boolean; sansSiteHisto?: boolean };
 
 export function normalizeTarget(raw: unknown): Required<Target> {
   const t = (raw && typeof raw === "object" ? raw : {}) as Target;
@@ -317,11 +321,23 @@ export function normalizeTarget(raw: unknown): Required<Target> {
     // Découverte des adresses : site deviné depuis le nom (toujours) et
     // moteur de recherche quand une clé est configurée côté serveur.
     guess: t.guess === undefined ? true : !!t.guess, search: t.search === undefined ? true : !!t.search,
+    // Source « sans site internet » (annuaire RGE, bâtiment) : entreprises avec
+    // e-mail mais sans site, qualifications actuelles et anciennes.
+    sansSite: t.sansSite === undefined ? true : !!t.sansSite, sansSiteHisto: t.sansSiteHisto === undefined ? true : !!t.sansSiteHisto,
   };
 }
 
 export function targetKey(target: Required<Target>) {
-  return JSON.stringify(["y1", target.sect, target.nafs, target.effs, target.deps]);
+  return JSON.stringify(["y2", target.sect, target.nafs, target.effs, target.deps, target.sansSite, target.sansSiteHisto]);
+}
+
+// Choix des modèles selon le public : un prospect sans site internet ne
+// reçoit que les modèles « sanssite » s'il en existe (sinon « tous ») ; les
+// autres reçoivent les modèles « avecsite » s'il en existe (sinon « tous »).
+export function pickTemplates<T extends { audience?: string | null }>(templates: T[], data: Record<string, unknown> | null | undefined) {
+  const wanted = String((data || {}).sanssite || "") === "1" ? "sanssite" : "avecsite";
+  const dedicated = templates.filter((t) => (t.audience || "tous") === wanted);
+  return dedicated.length ? dedicated : templates.filter((t) => (t.audience || "tous") === "tous");
 }
 
 // Paramètres de l'API Recherche d'entreprises pour une unité de balayage.
@@ -391,6 +407,8 @@ export type Company = {
   email: string; site: string; how: string; ownDomain: boolean; tel: string;
   // Association, syndicat, parti, organisme public : pas une entreprise à prospecter.
   association: boolean;
+  // Entreprise sans site internet (annuaire RGE) et origine de la fiche (sirene, rge).
+  sansSite: boolean; source: string;
 };
 
 // deno-lint-ignore no-explicit-any
@@ -415,6 +433,7 @@ export function normalizeCompany(r: any, now = Date.now()): Company {
     // NAF 94 (organisations associatives, syndicats, partis), 84 (administration),
     // nature juridique 7xxx (personnes morales de droit public) ou 92xx (associations).
     association: /^(94|84)/.test(naf) || !!r?.complements?.est_association || /^(7|92)/.test(String(r?.nature_juridique || "")),
+    sansSite: false, source: "sirene",
   };
 }
 
@@ -439,6 +458,8 @@ export function companyToQueueItem(c: Company, score: number) {
     data: {
       entreprise: c.enseigne || c.nom, prenom: c.prenom, nom: c.nomDir, ville: c.commune, cp: c.cp,
       metier: c.metier, departement: c.dep, effectif: c.effectif, site: c.site, tel: c.tel, how: c.how, naf: c.naf,
+      // « 1 » pour une entreprise sans site internet (annuaire RGE) : modèles réservés, badge dans Envois.
+      sanssite: c.sansSite ? "1" : "", source: c.source,
     },
   };
 }

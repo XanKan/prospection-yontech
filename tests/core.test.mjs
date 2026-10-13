@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import {
   BRAND, niceCompany, templateVars, renderTemplate, unknownVariables, composeEmail, classifySmtpError, retryDelaySeconds,
   normalizeTarget, sireneParams, normalizeCompany, scoreCompany, companyToQueueItem, maskEmail, youtubeId, metierFor,
-  nameWords, domainCandidates, extractEmails, verifyPage, secondaryLinks, isDirectoryHost, DEFAULT_SECTIONS, SECTIONS,
+  nameWords, domainCandidates, extractEmails, verifyPage, secondaryLinks, isDirectoryHost, DEFAULT_SECTIONS, SECTIONS, targetKey, pickTemplates,
 } from '../supabase/functions/_shared/yontech-core.ts';
 
 // Raisons sociales SIRENE en capitales : écrites comme à la main.
@@ -37,6 +37,9 @@ assert.equal(mail.subject, 'Dupont Mecanique : une application ?');
 assert.match(mail.text, /base SIRENE de l'INSEE/);
 assert.match(mail.text, /site internet/);
 assert.doesNotMatch(mail.text, /RGE|ADEME|Piloz/);
+const mailRge = composeEmail({ subject: 's', body: 'x', unsubscribeUrl: 'u', vars, source: 'rge' });
+assert.match(mailRge.text, /annuaire public des entreprises qualifiées RGE \(ADEME/, 'origine des données pour une entreprise sans site');
+assert.match(mailRge.html, /qualifiées RGE/);
 assert.match(mail.text, /desinscription\.html\?t=abc/);
 assert.match(mail.html, /desinscription\.html\?t=abc/);
 assert.match(mail.html, /&lt;b&gt;Test&lt;\/b&gt;/);
@@ -141,6 +144,25 @@ assert.equal(isDirectoryHost('www.societe.com'), true);
 assert.equal(isDirectoryHost('fr.linkedin.com'), true);
 assert.equal(isDirectoryHost('dupont-mecanique.fr'), false);
 
+
+// Source « sans site internet » (annuaire RGE) et public des modèles.
+assert.equal(normalizeTarget({}).sansSite, true, 'entreprises sans site cherchées par défaut');
+assert.equal(normalizeTarget({}).sansSiteHisto, true);
+assert.equal(normalizeTarget({ sansSite: false }).sansSite, false);
+assert.notEqual(targetKey(normalizeTarget({})), targetKey(normalizeTarget({ sansSite: false })), 'le curseur repart quand la source change');
+const tpls = [{ id: 'a', audience: 'tous' }, { id: 'b', audience: 'sanssite' }, { id: 'c', audience: 'avecsite' }];
+assert.deepEqual(pickTemplates(tpls, { sanssite: '1' }).map((t) => t.id), ['b']);
+assert.deepEqual(pickTemplates(tpls, { sanssite: '' }).map((t) => t.id), ['c']);
+assert.deepEqual(pickTemplates(tpls, {}).map((t) => t.id), ['c']);
+assert.deepEqual(pickTemplates([tpls[0], tpls[2]], { sanssite: '1' }).map((t) => t.id), ['a'], 'repli sur « tous »');
+assert.deepEqual(pickTemplates([tpls[0]], {}).map((t) => t.id), ['a']);
+assert.deepEqual(pickTemplates([tpls[1]], {}), [], 'aucun modèle pour les entreprises avec site');
+assert.equal(companyToQueueItem(company, 50).data.sanssite, '');
+company.sansSite = true; company.source = 'rge';
+assert.equal(companyToQueueItem(company, 50).data.sanssite, '1');
+assert.equal(companyToQueueItem(company, 50).data.source, 'rge');
+company.sansSite = false; company.source = 'sirene';
+
 // Marque : rien ne renvoie vers l'outil Piloz.
 assert.equal(BRAND.name, 'Yontech');
 assert.doesNotMatch(JSON.stringify(BRAND), /piloz\.fr\/(desinscription|t\b)/);
@@ -154,11 +176,15 @@ assert.match(sql, /for update skip locked/);
 assert.match(sql, /enable row level security/);
 assert.doesNotMatch(sql, /public\.prospection_|'piloz-prospection/, 'aucune table ni tâche de l\'outil Piloz');
 assert.match(sql, /cron\.schedule\('yontech-prospection-sourcer'/);
+const sql2 = readFileSync(new URL('../supabase/migrations/202610131500_yontech_sans_site.sql', import.meta.url), 'utf8');
+assert.match(sql2, /audience in\('tous','sanssite','avecsite'\)/);
 const config = readFileSync(new URL('../supabase/config.toml', import.meta.url), 'utf8');
 assert.match(config, /\[functions\.yontech-prospection-unsubscribe\]\s*\nverify_jwt = false/);
 assert.match(config, /\[functions\.yontech-prospection-api\]\s*\nverify_jwt = true/);
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.doesNotMatch(html, /"\/functions\/v1\/prospection-api"|reseau\.|RGE|ADEME|piloz\.fr/, 'la page ne parle ni de Piloz, ni du RGE, ni de LinkedIn');
+assert.doesNotMatch(html, /"\/functions\/v1\/prospection-api"|reseau\.|piloz\.fr|hpxcbemezvynofxiffzs/, 'la page ne renvoie ni vers Piloz ni vers LinkedIn');
 assert.match(html, /yontech-prospection-api/);
+assert.match(html, /tSansSite/, 'ciblage sans site internet');
+assert.match(html, /tAudience/, 'public des modèles');
 
 console.log('Automate Yontech : personnalisation, mentions légales, suivi, erreurs SMTP, ciblage, score et découverte web vérifiés.');

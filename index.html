@@ -509,6 +509,12 @@
             </div>
           </div>
           <div class="fset">
+            <div class="fset-h"><h3>Entreprises sans site internet</h3><span class="sub">annuaire RGE de l'ADEME (bâtiment) : la seule base publique qui donne l'e-mail d'entreprises et indique si elles ont un site</span></div>
+            <label class="swi"><input type="checkbox" id="tSansSite" checked><i></i> Chercher aussi les entreprises du bâtiment qualifiées RGE qui n'ont <b>aucun site internet</b> et leur envoyer les modèles réservés « Sans site internet »</label>
+            <label class="swi" style="margin-top:10px"><input type="checkbox" id="tSansSiteHisto" checked><i></i> Inclure les anciennes qualifications RGE (deux fois plus d'entreprises, adresses plus anciennes)</label>
+            <p class="note" style="margin-top:10px">Environ 52 000 lignes RGE actuelles et 119 000 anciennes portent un e-mail sans site internet, surtout des artisans : la tranche d'effectif ci-dessus ne s'applique pas à cette source, la zone si. Ces prospects reçoivent uniquement les modèles dont le public est « Sans site internet » (écran Messages) et portent le badge <span class="badge open">Sans site</span> dans Envois. Le balayage se fait département par département, jusqu'à 40 secondes par passage, avant la recherche web.</p>
+          </div>
+          <div class="fset">
             <div class="fset-h"><h3>Découverte des adresses e-mail</h3><span class="sub">la base SIRENE ne publie aucune coordonnée : l'adresse est lue sur le site internet de chaque entreprise</span></div>
             <label class="swi"><input type="checkbox" id="tGuess" checked><i></i> Deviner le site depuis le nom de l'entreprise (dupont-mecanique.fr…) — gratuit, sans clé</label>
             <label class="swi" style="margin-top:10px"><input type="checkbox" id="tSearch" checked><i></i> Chercher le site avec un moteur de recherche (API Brave Search, clé côté serveur)</label>
@@ -553,6 +559,8 @@
                   <div class="fld"><label for="tName">Nom interne</label><input class="inp" id="tName" maxlength="120" placeholder="ex. Application sur-mesure — industrie"></div>
                   <div class="fld"><label for="tKind">Type</label><select class="inp" id="tKind"><option value="initial">Premier contact</option><option value="relance1">Relance 1</option><option value="relance2">Relance 2 (dernière)</option></select>
                     <p class="help">Une relance part dans le fil du premier message, en « Re : », aux destinataires qui n'ont pas répondu. Délais et conditions dans Réglages.</p></div>
+                  <div class="fld"><label for="tAudience">Public</label><select class="inp" id="tAudience"><option value="tous">Toutes les entreprises</option><option value="sanssite">Sans site internet (annuaire RGE)</option><option value="avecsite">Avec site internet</option></select>
+                    <p class="help">Un prospect sans site internet ne reçoit que les modèles « Sans site internet » s'il en existe ; les autres reçoivent « Avec site internet » s'il en existe, sinon « Toutes ».</p></div>
                   <div class="fld"><label for="tSubject">Objet</label><input class="inp" id="tSubject" maxlength="200"></div>
                   <div class="fld full"><label for="tBody">Message</label><textarea class="inp" id="tBody" rows="12" maxlength="8000"></textarea>
                     <div class="vars" id="varChips"></div>
@@ -598,6 +606,7 @@
               <option value="">Découverte : toutes</option>
               <option value="guess">Site deviné depuis le nom</option>
               <option value="search">Site trouvé par le moteur de recherche</option>
+              <option value="sanssite">Sans site internet (annuaire RGE)</option>
             </select>
             <select class="inp" id="lStage" hidden style="width:auto">
               <option value="">Relances : toutes</option>
@@ -999,7 +1008,9 @@ function buildEmail(tpl, s, data){
   const company = v.entreprise || "votre entreprise", identity = clean(s.footer_identity, 300);
   const html = '<div style="font:15px/1.6 Arial,Helvetica,sans-serif;color:#1f2030;max-width:640px">' + textToHtml(before) + video + (after ? textToHtml(after) : "") + sig +
     '<p style="margin:28px 0 0;padding-top:12px;border-top:1px solid #e5e5ef;font-size:12px;line-height:1.5;color:#8a8ca0">Vous recevez ce message car ' + hesc(company) +
-    " figure dans le répertoire public des entreprises (base SIRENE de l'INSEE) et publie ses coordonnées professionnelles sur son site internet. " +
+    ((data || {}).source === "rge"
+      ? " figure dans l'annuaire public des entreprises qualifiées RGE (ADEME, Licence Ouverte) et dans le répertoire des entreprises (base SIRENE de l'INSEE). "
+      : " figure dans le répertoire public des entreprises (base SIRENE de l'INSEE) et publie ses coordonnées professionnelles sur son site internet. ") +
     '<a href="' + UNSUB_URL + '" style="color:#8a8ca0">Ne plus recevoir de message</a>.' + (identity ? "<br>" + hesc(identity) : "") + "</p></div>";
   return { subject: clean(renderTpl(tpl.subject, v), 200), html };
 }
@@ -1170,6 +1181,7 @@ function renderState(){
   $("apReport").innerHTML = rep
     ? "<b>Dernier passage " + esc(ago(rep.at)) + " :</b> " + fmt(rep.scanned) + " entreprise(s) lue(s) dans SIRENE, " + fmt(rep.sites) + " site(s) vérifié(s), " + fmt(rep.withEmail) + " adresse(s) trouvée(s), " + fmt(rep.added) + " ajoutée(s) à la file" + (rep.known ? ", " + fmt(rep.known) + " déjà connue(s)" : "") + (rep.noFirstName ? ", " + fmt(rep.noFirstName) + " sans prénom" : "") + (rep.lowScore ? ", " + fmt(rep.lowScore) + " sous le score minimum" : "") + (rep.searches ? ", " + fmt(rep.searches) + " recherche(s) web" : "") + "."
       + (rep.searchBlocked ? " <b>Le moteur de recherche a refusé des requêtes (quota) :</b> seuls les domaines devinés ont été essayés." : "")
+      + (rep.rge ? " <b>Sans site internet (RGE) :</b> " + (rep.rge.off ? "indisponible (" + esc(rep.rge.off) + "). " : "") + fmt(rep.rge.lines) + " ligne(s) lue(s), " + fmt(rep.rge.companies) + " entreprise(s), " + fmt(rep.rge.added) + " ajoutée(s)" + (rep.rge.known ? ", " + fmt(rep.rge.known) + " déjà connue(s)" : "") + (rep.rge.done ? " · annuaire entièrement parcouru" : "") + "." : "")
       + (rep.exhausted ? " <b>Toutes les entreprises du ciblage ont été parcourues</b> : élargissez-le pour continuer." : "")
     : "Aucun passage pour l'instant : le premier aura lieu dès que l'automate sera démarré.";
   const sc = state.scanned || {};
@@ -1272,7 +1284,7 @@ function targetSummary(t){
   const effTxt = effs.length ? "effectif " + effs[0].split(" à ")[0] + " à " + (effs[effs.length - 1].split(" à ")[1] || effs[effs.length - 1]) + " salariés" : "tous effectifs";
   const zone = t.deps && t.deps.length ? "départements " + t.deps.join(", ") : "toute la France";
   const how = [t.guess !== false ? "site deviné" : "", t.search !== false ? "moteur de recherche" : ""].filter(Boolean).join(" + ") || "aucune découverte";
-  return what + " · " + effTxt + " · " + zone + " · " + how;
+  return what + " · " + effTxt + " · " + zone + " · " + how + (t.sansSite !== false ? " · + sans site internet (RGE" + (t.sansSiteHisto !== false ? ", anciens compris" : "") + ")" : "");
 }
 function parseDeps(text){
   const list = String(text || "").toUpperCase().split(/[\s,;]+/).map(d => d.trim()).filter(Boolean).map(d => /^\d$/.test(d) ? "0" + d : d);
@@ -1308,7 +1320,7 @@ function readTarget(){
   if (!effs.length) throw new Error("Sélectionnez au moins une tranche d'effectif.");
   if (!$("tGuess").checked && !$("tSearch").checked) throw new Error("Activez au moins une méthode de découverte des adresses.");
   return {
-    target: { sect, nafs, effs, deps: parseDeps($("deps").value), guess: $("tGuess").checked, search: $("tSearch").checked },
+    target: { sect, nafs, effs, deps: parseDeps($("deps").value), guess: $("tGuess").checked, search: $("tSearch").checked, sansSite: $("tSansSite").checked, sansSiteHisto: $("tSansSiteHisto").checked },
     minScore: Number(document.querySelector("input[name=minscore]:checked").value),
     requireFirstName: $("tReqFirst").checked
   };
@@ -1325,6 +1337,8 @@ function fillTarget(){
   $("deps").value = (t.deps || []).join(", ");
   $("tGuess").checked = t.guess !== false;
   $("tSearch").checked = t.search !== false;
+  $("tSansSite").checked = t.sansSite !== false;
+  $("tSansSiteHisto").checked = t.sansSiteHisto !== false;
   $("tReqFirst").checked = state.settings.require_first_name === true;
   const score = Number(state.settings.autopilot_min_score || 0);
   const scoreValue = score >= 65 ? "65" : score >= 40 ? "40" : "0";
@@ -1389,10 +1403,10 @@ $("bTargetMax").addEventListener("click", () => {
   $("nafs").value = "";
   document.querySelectorAll("input[name=eff]").forEach(c => { c.checked = !c.value.split(",").some(v => ["NN", "00", "01", "02"].includes(v)); });
   document.querySelectorAll("input[name=minscore]").forEach(r => { r.checked = r.value === "0"; });
-  $("tGuess").checked = true; $("tSearch").checked = true; $("tReqFirst").checked = false;
+  $("tGuess").checked = true; $("tSearch").checked = true; $("tSansSite").checked = true; $("tSansSiteHisto").checked = true; $("tReqFirst").checked = false;
   $("deps").value = "";
   targetChanged();
-  toast("Volume maximum : toutes les entreprises privées à partir de 6 salariés, toute la France, toutes les méthodes de découverte. Pensez à enregistrer.", 6000);
+  toast("Volume maximum : toutes les entreprises privées à partir de 6 salariés, toute la France, toutes les méthodes de découverte, entreprises sans site comprises. Pensez à enregistrer.", 6000);
 });
 $("targetForm").addEventListener("input", targetChanged);
 $("targetForm").addEventListener("change", targetChanged);
@@ -1451,7 +1465,7 @@ function renderTemplates(){
   if (tplId && !list.some(t => t.id === tplId)) tplId = null;
   if (tplId === null && list.length && !$("tName").dataset.dirty) tplId = list[0].id;
   $("tplList").innerHTML = list.map(t =>
-    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + "</b><span>" + esc(KIND[t.kind] ? "Re : objet du premier message" : t.subject) + "</span></button>"
+    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + (AUDIENCE[t.audience] ? ' <code class="k">' + AUDIENCE[t.audience] + "</code>" : "") + "</b><span>" + esc(KIND[t.kind] ? "Re : objet du premier message" : t.subject) + "</span></button>"
   ).join("") || '<p class="note" style="margin-bottom:10px">Aucun modèle pour l\'instant.</p>';
   // Une modification en cours n'est jamais écrasée par un rafraîchissement.
   if (!$("tName").dataset.dirty) fillTemplate(list.find(x => x.id === tplId) || { name: "", subject: "", body: "", active: true });
@@ -1473,6 +1487,7 @@ async function loadSamples(){
   } catch(e){}
 }
 const KIND = { relance1: "relance 1", relance2: "relance 2" };
+const AUDIENCE = { sanssite: "sans site", avecsite: "avec site" };
 // Une relance part toujours en « Re : » sur l'objet du premier message : son objet propre ne sert pas.
 function syncKind(){
   const relance = $("tKind").value !== "initial";
@@ -1484,6 +1499,7 @@ function fillTemplate(t){
   $("tName").value = t.name || ""; $("tSubject").value = t.subject || ""; $("tBody").value = t.body || "";
   $("tActive").checked = t.active !== false;
   $("tKind").value = t.kind || "initial"; syncKind();
+  $("tAudience").value = t.audience || "tous";
   $("bTplDel").hidden = !t.id;
   $("tplMsg").textContent = "";
   delete $("tName").dataset.dirty;
@@ -1497,6 +1513,7 @@ function renderPreview(){
 }
 ["tName", "tSubject", "tBody"].forEach(id => $(id).addEventListener("input", () => { $("tName").dataset.dirty = "1"; renderPreview(); }));
 $("tKind").addEventListener("change", () => { $("tName").dataset.dirty = "1"; syncKind(); renderPreview(); });
+$("tAudience").addEventListener("change", () => { $("tName").dataset.dirty = "1"; });
 $("tplSample").addEventListener("change", renderPreview);
 $("tplList").addEventListener("click", ev => {
   const b = ev.target.closest("[data-tpl]");
@@ -1508,7 +1525,7 @@ $("tplList").addEventListener("click", ev => {
 $("bTplNew").addEventListener("click", () => {
   tplId = "";
   document.querySelectorAll(".tpl-item").forEach(x => x.classList.remove("on"));
-  fillTemplate({ name: "", subject: "{entreprise} : ", body: "{bonjour},\n\n\n\nRépondez simplement « ok » et nous vous rappelons.\n\nBien cordialement,", active: true, kind: "initial" });
+  fillTemplate({ name: "", subject: "{entreprise} : ", body: "{bonjour},\n\n\n\nRépondez simplement « ok » et nous vous rappelons.\n\nBien cordialement,", active: true, kind: "initial", audience: "tous" });
   $("tName").dataset.dirty = "1";
   renderPreview();
   $("tName").focus();
@@ -1517,7 +1534,7 @@ $("bTplSave").addEventListener("click", async ev => {
   const btn = ev.currentTarget;
   busy(btn, true, "Enregistrement…");
   try {
-    const { template } = await api("templates.save", { id: tplId || undefined, name: $("tName").value, subject: $("tSubject").value, body: $("tBody").value, active: $("tActive").checked, kind: $("tKind").value });
+    const { template } = await api("templates.save", { id: tplId || undefined, name: $("tName").value, subject: $("tSubject").value, body: $("tBody").value, active: $("tActive").checked, kind: $("tKind").value, audience: $("tAudience").value });
     tplId = template.id;
     delete $("tName").dataset.dirty;
     await loadState();
@@ -1572,6 +1589,7 @@ function trackBadges(m){
 function signalBadge(m){
   const d = m.data || {};
   const how = String(d.how || "");
+  if (d.sanssite === "1") return ' <span class="badge open" title="Entreprise sans site internet (annuaire RGE de l\'ADEME) : reçoit les modèles « Sans site internet »">Sans site</span>';
   if (!how) return "";
   const site = String(d.site || "").replace(/^https?:\/\//, "");
   const proof = /siren/.test(how) ? "SIREN sur le site" : "nom et ville sur le site";
@@ -1689,7 +1707,7 @@ async function openMessage(id){
         "<div><dt>Prénom / nom</dt><dd>" + esc([d.prenom, d.nom].filter(Boolean).join(" ") || "—") + "</dd></div>" +
         "<div><dt>Ville</dt><dd>" + esc([d.cp, d.ville].filter(Boolean).join(" ") || "—") + "</dd></div>" +
         "<div><dt>Activité</dt><dd>" + esc(d.metier || "—") + (d.naf ? ' <span class="muted">(' + esc(d.naf) + ")</span>" : "") + "</dd></div>" +
-        "<div><dt>Site internet</dt><dd>" + (d.site ? '<a href="' + esc(d.site) + '" target="_blank" rel="noopener">' + esc(String(d.site).replace(/^https?:\/\//, "")) + "</a>" + (d.how ? ' <span class="muted">(' + (/^search/.test(d.how) ? "moteur de recherche" : "domaine deviné") + ", " + (/siren/.test(d.how) ? "SIREN vérifié" : "nom et ville vérifiés") + ")</span>" : "") : "—") + "</dd></div>" +
+        "<div><dt>Site internet</dt><dd>" + (d.sanssite === "1" ? "<b>aucun</b> <span class=\"muted\">(annuaire RGE de l'ADEME, e-mail déclaré par l'entreprise)</span>" : d.site ? '<a href="' + esc(d.site) + '" target="_blank" rel="noopener">' + esc(String(d.site).replace(/^https?:\/\//, "")) + "</a>" + (d.how ? ' <span class="muted">(' + (/^search/.test(d.how) ? "moteur de recherche" : "domaine deviné") + ", " + (/siren/.test(d.how) ? "SIREN vérifié" : "nom et ville vérifiés") + ")</span>" : "") : "—") + "</dd></div>" +
         "<div><dt>SIREN</dt><dd>" + (m.siren ? '<a href="https://annuaire-entreprises.data.gouv.fr/entreprise/' + esc(m.siren) + '" target="_blank" rel="noopener">' + esc(m.siren) + "</a>" : "—") + "</dd></div>" +
         "<div><dt>Origine</dt><dd>" + esc(ORIGIN[m.origin] || m.origin) + (m.score != null ? " · score " + m.score : "") + "</dd></div>" +
         (d.tel ? "<div><dt>Téléphone</dt><dd>" + esc(d.tel) + "</dd></div>" : "") +
@@ -1864,6 +1882,8 @@ function openHelp(topic){
     '<p class="note">Chaque entreprise ne reçoit <b>qu\'un seul message</b>, jamais deux, même si elle réapparaît dans une recherche ; puis au plus deux relances si vous les activez. Les réponses arrivent directement dans votre boîte mail.</p>' +
     '<p class="sect-t" style="margin-top:20px">Trouver les adresses</p>' +
     '<p class="note">La base SIRENE ne publie aucune coordonnée. L\'automate <b>devine le site</b> de l\'entreprise à partir de son nom (dupont-mecanique.fr, dupontmecanique.com…) et, si une clé est configurée, l\'<b>interroge un moteur de recherche</b>. Un site n\'est retenu que s\'il porte le SIREN ou le SIRET de l\'entreprise (mentions légales) ou son nom avec sa ville. L\'adresse est lue sur la page d\'accueil, la page contact ou les mentions légales : celle du dirigeant d\'abord, sinon contact@, info@… sur le domaine de l\'entreprise de préférence. Comptez environ une adresse pour cinq entreprises ; la recherche tourne jour et nuit, l\'envoi aux heures de bureau.</p>' +
+    '<p class="sect-t" style="margin-top:20px">Les entreprises sans site internet</p>' +
+    '<p class="note">La base SIRENE ne dit pas si une entreprise a un site. L\'annuaire <b>RGE de l\'ADEME</b> (bâtiment, Licence Ouverte) donne l\'e-mail déclaré par chaque entreprise qualifiée et son site internet quand elle en a un : celles qui n\'en ont pas sont ajoutées à la réserve avec le badge « Sans site », quelle que soit leur taille, et reçoivent uniquement les modèles dont le public est « Sans site internet ».</p>' +
     '<p class="sect-t" style="margin-top:20px">La cadence et la réputation de yontech.fr</p>' +
     '<p class="note">Les messages partent de votre vrai domaine. Pour que Gmail et Outlook continuent de les accepter, l\'automate <b>monte progressivement en volume</b> (50 le premier jour, +50 par jour d\'envoi, réglable), espace les messages au hasard et ne travaille qu\'aux heures de bureau. En cas d\'incident passager ou de quota Hostinger atteint, il patiente puis reprend seul ; il ne <b>se met en pause</b> que si la boîte refuse les envois, et vous prévient alors par e-mail.</p>' +
     '<p class="note">Le suivi (ouverture, clics) est discret : un pixel et des liens réécrits dans la version HTML seulement ; le lien de désinscription n\'est jamais suivi, et les clics automatiques des filtres de sécurité sont comptés à part (« scanner »).</p>' +

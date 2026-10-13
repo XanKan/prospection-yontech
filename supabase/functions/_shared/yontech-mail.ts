@@ -56,13 +56,13 @@ export type DeliveryResult =
 
 export async function deliver(input: {
   settings: SenderSettings; template: MailTemplate; to: string; vars: Vars; token: string;
-  trackingToken?: string; subjectPrefix?: string; inReplyTo?: string;
+  trackingToken?: string; subjectPrefix?: string; inReplyTo?: string; source?: string;
 }): Promise<DeliveryResult> {
   const links = unsubscribeLinks(input.token);
   const mail = composeEmail({
     subject: input.template.subject, body: input.template.body, signature: input.settings.signature,
     footerIdentity: input.settings.footer_identity, unsubscribeUrl: links.page, vars: input.vars,
-    videoUrl: input.settings.video_url || "",
+    videoUrl: input.settings.video_url || "", source: input.source,
     tracking: input.trackingToken ? { base: trackingBase(), token: input.trackingToken } : undefined,
     logoUrl: Deno.env.get("YONTECH_LOGO_URL") ?? BRAND.logo,
   });

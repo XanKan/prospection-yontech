@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { templateVars } from "./yontech-core.ts";
+import { pickTemplates, templateVars } from "./yontech-core.ts";
 import { alertAdmin, deliver, type MailTemplate, type SenderSettings } from "./yontech-mail.ts";
 import { runSourcing } from "./yontech-sourcing.ts";
 
@@ -14,16 +14,19 @@ export async function sendNext(db: SupabaseClient) {
   if (claim?.state !== "claimed") return claim;
   const message = claim.message, settings = claim.settings as SenderSettings;
   if (claim.kind === "followup") return sendFollowup(db, claim);
-  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("active", true).eq("kind", "initial");
+  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body,audience").eq("active", true).eq("kind", "initial");
   if (templateError) throw templateError;
-  if (!templates?.length) {
-    await db.rpc("yontech_prospection_finish", { target_id: message.id, outcome: "fatal", target_error: "Aucun modèle de message actif." });
-    await alertAdmin(settings, "Aucun modèle de message actif", "Activez au moins un modèle de premier contact dans l'écran Messages.");
+  // Public du modèle : un prospect sans site internet reçoit les modèles
+  // « Sans site internet » s'il en existe, les autres « Avec site » ou « Toutes ».
+  const pool = pickTemplates(templates || [], message.data || {});
+  if (!pool.length) {
+    await db.rpc("yontech_prospection_finish", { target_id: message.id, outcome: "fatal", target_error: "Aucun modèle de message actif pour ce public." });
+    await alertAdmin(settings, "Aucun modèle de message actif", "Activez au moins un modèle de premier contact pour « Toutes les entreprises » dans l'écran Messages.");
     return { state: "paused", reason: "no_template" };
   }
-  const template = templates[Math.floor(Math.random() * templates.length)] as MailTemplate;
+  const template = pool[Math.floor(Math.random() * pool.length)] as MailTemplate;
   const result = await deliver({
-    settings, template, to: message.email, vars: templateVars(message.data || {}),
+    settings, template, to: message.email, vars: templateVars(message.data || {}), source: String((message.data || {}).source || ""),
     token: message.unsubscribe_token, trackingToken: message.tracking_token || undefined,
   });
   const { data: finished, error: finishError } = await db.rpc("yontech_prospection_finish", result.ok
@@ -41,17 +44,19 @@ export async function sendNext(db: SupabaseClient) {
 async function sendFollowup(db: SupabaseClient, claim: { followup: { id: string; stage: number }; message: Record<string, unknown>; settings: Record<string, unknown> }) {
   const f = claim.followup, message = claim.message, settings = claim.settings as SenderSettings;
   const kind = f.stage === 2 ? "relance2" : "relance1";
-  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("active", true).eq("kind", kind);
+  const { data: templates, error: templateError } = await db.from("yontech_prospection_templates").select("id,subject,body,audience").eq("active", true).eq("kind", kind);
   if (templateError) throw templateError;
-  if (!templates?.length) {
-    await db.rpc("yontech_prospection_followup_finish", { target_id: f.id, outcome: "transient", target_error: `Aucun modèle actif de type ${kind}.` });
+  const pool = pickTemplates(templates || [], (message.data as Record<string, unknown>) || {});
+  if (!pool.length) {
+    await db.rpc("yontech_prospection_followup_finish", { target_id: f.id, outcome: "transient", target_error: `Aucun modèle actif de type ${kind} pour ce public.` });
     return { state: "error", outcome: "transient", error: "no_followup_template" };
   }
-  const picked = templates[Math.floor(Math.random() * templates.length)] as MailTemplate;
+  const picked = pool[Math.floor(Math.random() * pool.length)] as MailTemplate;
   const original = String(message.subject || "").replace(/^\s*(re|tr|fwd?)\s*:\s*/i, "");
   const template: MailTemplate = { id: picked.id, subject: original ? `Re: ${original}` : picked.subject, body: picked.body };
   const result = await deliver({
     settings, template, to: String(message.email), vars: templateVars((message.data as Record<string, unknown>) || {}),
+    source: String(((message.data as Record<string, unknown>) || {}).source || ""),
     token: String(message.unsubscribe_token), trackingToken: message.tracking_token ? String(message.tracking_token) : undefined,
     inReplyTo: message.message_id ? String(message.message_id) : undefined,
   });

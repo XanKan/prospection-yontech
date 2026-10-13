@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
 
       const [settings, templates, queued, sent, failed, skipped, suppressions, sentToday, cap, recent, history, opened, video, clickedSite, followups, scanned, scanStats] = await Promise.all([
         db.from("yontech_prospection_settings").select(SETTINGS_COLUMNS).eq("id", 1).single(),
-        db.from("yontech_prospection_templates").select("id,name,subject,body,active,kind,updated_at").order("created_at"),
+        db.from("yontech_prospection_templates").select("id,name,subject,body,active,kind,audience,updated_at").order("created_at"),
         db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).in("status", ["queued", "sending"]),
         db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "sent"),
         db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "failed"),
@@ -212,8 +212,12 @@ Deno.serve(async (req) => {
         const changed = (patch.autopilot_target && targetKey(normalizeTarget(before.autopilot_target)) !== targetKey(patch.autopilot_target as ReturnType<typeof normalizeTarget>))
           || ("autopilot_min_score" in patch && patch.autopilot_min_score !== before.autopilot_min_score);
         if (changed) {
-          const removed = check(await db.from("yontech_prospection_messages").delete().eq("status", "queued").eq("origin", "autopilote").select("id"));
+          const removed = check(await db.from("yontech_prospection_messages").delete().eq("status", "queued").eq("origin", "autopilote").select("id,siren")) as Array<{ id: string; siren: string | null }>;
           replaced = (removed || []).length;
+          // Ces entreprises doivent pouvoir être retrouvées par le nouveau ciblage :
+          // elles sont retirées de la mémoire des entreprises déjà examinées.
+          const sirens = (removed || []).map((r) => r.siren).filter((s): s is string => !!s);
+          for (let i = 0; i < sirens.length; i += 500) check(await db.from("yontech_prospection_scanned").delete().in("siren", sirens.slice(i, i + 500)));
           patch.last_sourcing_at = null;
         }
       }
@@ -224,7 +228,9 @@ Deno.serve(async (req) => {
     if (action === "templates.save") {
       const kind = ["initial", "relance1", "relance2"].includes(String(payload.kind)) ? String(payload.kind) : "initial";
       const subject = kind === "initial" ? text(payload.subject, 200) : (text(payload.subject, 200) || "Re : (objet du premier message)");
-      const row = { name: text(payload.name, 120), subject, body: text(payload.body, 8000), active: payload.active !== false, kind, updated_at: new Date().toISOString() };
+      // Public : toutes les entreprises, sans site internet (annuaire RGE) ou avec site.
+      const audience = ["tous", "sanssite", "avecsite"].includes(String(payload.audience)) ? String(payload.audience) : "tous";
+      const row = { name: text(payload.name, 120), subject, body: text(payload.body, 8000), active: payload.active !== false, kind, audience, updated_at: new Date().toISOString() };
       if (!row.name || !row.subject || !row.body) throw fail("Nom, objet et message sont obligatoires.");
       const unknown = unknownVariables(row.subject + "\n" + row.body);
       if (unknown.length) throw fail(`Variable inconnue : {${unknown.join("}, {")}}.`);
@@ -256,8 +262,10 @@ Deno.serve(async (req) => {
       if (status === "queued") query = query.in("status", ["queued", "sending"]);
       else if (["sent", "failed", "skipped"].includes(status)) query = query.eq("status", status);
       if (q) query = query.or(`company.ilike.%${q}%,email.ilike.%${q}%`);
-      // Filtre « Découverte » : site deviné depuis le nom ou trouvé par le moteur de recherche.
+      // Filtre « Découverte » : site deviné depuis le nom, trouvé par le moteur
+      // de recherche, ou entreprise sans site internet (annuaire RGE).
       if (how === "guess" || how === "search") query = query.like("data->>how", `${how}:%`);
+      else if (how === "sanssite") query = query.eq("data->>sanssite", "1");
       if (status === "sent" && track) {
         if (track === "opened") query = query.not("opened_at", "is", null);
         else if (track === "unopened") query = query.is("opened_at", null);

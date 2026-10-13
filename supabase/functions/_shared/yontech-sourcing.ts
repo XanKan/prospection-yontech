@@ -2,6 +2,7 @@ import {
   API_SIRENE, DEPARTEMENTS, type Company, companyToQueueItem, normalizeCompany, normalizeTarget, scoreCompany, sireneParams, targetKey,
 } from "./yontech-core.ts";
 import { discoverMany, type Discovery } from "./yontech-web.ts";
+import { companyForSiren, postalPrefixes, rgeSansSitePage } from "./yontech-rge.ts";
 
 // Pilote automatique : complète la file avec de nouvelles entreprises de la
 // base SIRENE (API Recherche d'entreprises, tous secteurs) correspondant au
@@ -15,11 +16,15 @@ import { discoverMany, type Discovery } from "./yontech-web.ts";
 // ciblage (générateur déterministe), pour varier les secteurs et les régions
 // d'un jour à l'autre sans stocker la liste.
 
-export type Cursor = { key: string; n: number; extra: string[]; done: number[]; pages: Record<string, number>; i: number };
+// Curseur de la source « sans site internet » (annuaire RGE) : préfixe de code
+// postal en cours, page, jeu (actuel puis historique), terminé ou non.
+export type RgeCursor = { i: number; page: number; histo: boolean; done: boolean };
+export type Cursor = { key: string; n: number; extra: string[]; done: number[]; pages: Record<string, number>; i: number; rge?: RgeCursor };
 export type QueueItem = ReturnType<typeof companyToQueueItem>;
+export type RgeReport = { lines: number; companies: number; known: number; outOfZone: number; noFirstName: number; lowScore: number; added: number; errors: number; done: boolean; off?: string };
 export type SourcingReport = {
   pages: number; scanned: number; known: number; sites: number; withEmail: number; lowScore: number; noFirstName: number;
-  added: number; errors: number; searches: number; searchBlocked: boolean; exhausted: boolean; at?: string;
+  added: number; errors: number; searches: number; searchBlocked: boolean; exhausted: boolean; at?: string; rge?: RgeReport;
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,6 +77,65 @@ export async function runSourcing(options: {
   const total = () => base.length + cursor.extra.length;
   const report: SourcingReport = { pages: 0, scanned: 0, known: 0, sites: 0, withEmail: 0, lowScore: 0, noFirstName: 0, added: 0, errors: 0, searches: 0, searchBlocked: false, exhausted: false };
   const doneSet = new Set(cursor.done);
+
+  // Source « sans site internet » (annuaire RGE) : jusqu'à 40 secondes par
+  // passage, département par département, jeu actuel puis historique. Ces
+  // entreprises ont déjà leur e-mail : pas de découverte web, juste la fiche
+  // SIRENE pour la personnalisation. La tranche d'effectif ne s'applique pas
+  // (ce sont surtout des artisans), la zone si.
+  if (target.sansSite) {
+    const prefixes = postalPrefixes(target.deps);
+    const rge: RgeCursor = cursor.rge && typeof cursor.rge.i === "number" ? cursor.rge : { i: 0, page: 1, histo: false, done: false };
+    cursor.rge = rge;
+    const rr: RgeReport = { lines: 0, companies: 0, known: 0, outOfZone: 0, noFirstName: 0, lowScore: 0, added: 0, errors: 0, done: rge.done };
+    report.rge = rr;
+    const rgeDeadline = Math.min(options.deadline - 15_000, Date.now() + 40_000);
+    while (!rge.done && rr.added < options.batch && Date.now() < rgeDeadline && rr.errors < 4) {
+      const prefix = prefixes[Math.min(rge.i, prefixes.length - 1)];
+      let page: Awaited<ReturnType<typeof rgeSansSitePage>>;
+      try { page = await rgeSansSitePage(prefix, rge.page, rge.histo); } catch (error) { rr.errors++; rr.off = String((error as Error)?.message || error).slice(0, 120); await sleep(800); continue; }
+      rr.lines += page.lines.length;
+      // Avance du curseur : page suivante, préfixe suivant, puis jeu historique, puis terminé.
+      if (page.last) {
+        rge.page = 1; rge.i++;
+        if (rge.i >= prefixes.length) {
+          if (!rge.histo && target.sansSiteHisto) { rge.histo = true; rge.i = 0; } else { rge.done = true; rr.done = true; }
+        }
+      } else rge.page++;
+      // Une entreprise par SIREN (plusieurs qualifications par entreprise) et pas déjà connue.
+      const bySiren = new Map<string, typeof page.lines[number]>();
+      for (const line of page.lines) if (!bySiren.has(line.siren)) bySiren.set(line.siren, line);
+      if (!bySiren.size) continue;
+      const knownSirens = await options.known([...bySiren.keys()], []);
+      const fresh = [...bySiren.values()].filter((l) => !knownSirens.sirens.has(l.siren));
+      rr.known += bySiren.size - fresh.length;
+      const knownEmails = fresh.length ? await options.known([], fresh.map((l) => l.email)) : { sirens: new Set<string>(), emails: new Set<string>() };
+      const items: QueueItem[] = [];
+      const scannedRows: { siren: string; site: string; email: string; how: string }[] = [];
+      const seen = new Set<string>();
+      for (const line of fresh) {
+        if (Date.now() > rgeDeadline) break;
+        if (knownEmails.emails.has(line.email) || seen.has(line.email)) { rr.known++; continue; }
+        let c: Company | null = null;
+        try { c = await companyForSiren(line.siren); } catch { rr.errors++; continue; }
+        await sleep(150);
+        if (!c) { scannedRows.push({ siren: line.siren, site: "", email: "", how: "rge:fermee" }); continue; }
+        if (target.deps.length && !target.deps.includes(c.dep)) { rr.outOfZone++; continue; }
+        if (c.association) continue;
+        rr.companies++;
+        c.email = line.email; c.tel = line.tel; c.sansSite = true; c.source = "rge"; c.how = "rge:sanssite"; c.ownDomain = false;
+        scannedRows.push({ siren: c.siren, site: "", email: c.email, how: c.how });
+        if (options.requireFirstName && !c.prenom) { rr.noFirstName++; continue; }
+        const score = scoreCompany(c);
+        if (score < options.minScore) { rr.lowScore++; continue; }
+        seen.add(c.email);
+        items.push(companyToQueueItem(c, score));
+      }
+      if (items.length) { const added = await options.enqueue(items); rr.added += added; report.added += added; }
+      if (scannedRows.length) await options.scanned(scannedRows);
+      await sleep(200);
+    }
+  }
 
   while (report.added < options.batch && Date.now() < options.deadline - 12_000 && report.errors < 6) {
     const pending: number[] = [];
