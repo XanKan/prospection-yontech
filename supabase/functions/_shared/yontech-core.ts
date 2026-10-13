@@ -171,13 +171,26 @@ export function youtubeThumb(url: string, size: "maxresdefault" | "hqdefault" = 
 
 function videoBlock(url: string, tracking?: Tracking, thumbUrl?: string) {
   // Miniature : la version 16:9 (maxresdefault) quand l'expéditeur l'a
-  // vérifiée, sinon hqdefault (4:3, toujours disponible).
-  const thumb = thumbUrl || youtubeThumb(url);
+  // vérifiée, sinon hqdefault (4:3, toujours disponible). Un bouton « play »
+  // blanc est posé au centre (fond de cellule, lu par Gmail, Apple Mail,
+  // Outlook.com) ; Outlook de bureau reçoit l'image seule. Sous l'image, une
+  // barre « Regarder la vidéo » cliquable dans tous les cas.
+  const thumb = htmlEscape(thumbUrl || youtubeThumb(url));
   const href = htmlEscape(trackedUrl(url, tracking));
+  const alt = `Vidéo : ${BRAND.name} en 1 minute`;
+  const picture = thumb
+    ? `<!--[if mso]><a href="${href}"><img src="${thumb}" width="480" alt="${alt}" style="display:block;border:0"></a><![endif]-->` +
+      `<!--[if !mso]><!--><a href="${href}" style="text-decoration:none;display:block">` +
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" background="${thumb}" style="background:#15161f url('${thumb}') center/cover no-repeat;border-radius:12px 12px 0 0">` +
+      `<tr><td align="center" valign="middle" style="height:270px;padding:0">` +
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" valign="middle" style="width:84px;height:84px;border-radius:42px;background:#ffffff;font:bold 34px Arial,sans-serif;color:#15161f;line-height:84px">&#9654;</td></tr></table>` +
+      `</td></tr></table></a><!--<![endif]-->`
+    : "";
   return {
-    text: `▶ Yontech en 1 minute : ${url}`,
-    html: (thumb ? `<p style="margin:4px 0 6px"><a href="${href}" style="text-decoration:none"><img src="${htmlEscape(thumb)}" width="480" alt="Vidéo : Yontech en 1 minute" style="display:block;width:100%;max-width:480px;height:auto;border:0;border-radius:12px"></a></p>` : "") +
-      `<p style="margin:0 0 16px;font-size:14px"><a href="${href}" style="color:${BRAND.accent};font-weight:bold">▶ Yontech en 1 minute</a></p>`,
+    text: `▶ Regarder la vidéo (1 minute) : ${url}`,
+    html: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 18px;width:100%;max-width:480px"><tr><td style="padding:0">` + picture +
+      `<a href="${href}" style="display:block;background:${BRAND.accent};color:#ffffff;text-align:center;font:bold 15px Arial,sans-serif;padding:13px 16px;border-radius:${thumb ? "0 0 12px 12px" : "12px"};text-decoration:none">&#9654;&nbsp; Regarder la vidéo &middot; 1 minute</a>` +
+      `</td></tr></table>`,
   };
 }
 
