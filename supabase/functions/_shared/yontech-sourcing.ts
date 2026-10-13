@@ -1,8 +1,9 @@
 import {
   API_SIRENE, DEPARTEMENTS, type Company, companyToQueueItem, normalizeCompany, normalizeTarget, scoreCompany, sireneParams, targetKey,
 } from "./yontech-core.ts";
-import { discoverMany, type Discovery } from "./yontech-web.ts";
+import { discoverMany, type Discovery, fetchPage } from "./yontech-web.ts";
 import { companyForSiren, postalPrefixes, rgeSansSitePage } from "./yontech-rge.ts";
+import { companyDomainOf } from "./yontech-core.ts";
 
 // Pilote automatique : complète la file avec de nouvelles entreprises de la
 // base SIRENE (API Recherche d'entreprises, tous secteurs) correspondant au
@@ -124,7 +125,15 @@ export async function runSourcing(options: {
         if (c.association) continue;
         rr.companies++;
         c.email = line.email; c.tel = line.tel; c.sansSite = true; c.source = "rge"; c.how = "rge:sanssite"; c.ownDomain = false;
-        scannedRows.push({ siren: c.siren, site: "", email: c.email, how: c.how });
+        // L'annuaire ne mentionne pas de site, mais l'adresse e-mail est sur un
+        // domaine d'entreprise : si ce domaine répond sur le web, l'entreprise a
+        // bien un site (fiche RGE incomplète) et reçoit les messages « avec site ».
+        const domain = companyDomainOf(c.email);
+        if (domain && Date.now() < rgeDeadline) {
+          const home = await fetchPage(`https://${domain}/`, 4000) || await fetchPage(`https://www.${domain}/`, 4000);
+          if (home) { c.site = `https://${home.host.replace(/^www\./, "")}`; c.sansSite = false; c.how = "rge:site"; c.ownDomain = true; }
+        }
+        scannedRows.push({ siren: c.siren, site: c.site, email: c.email, how: c.how });
         if (options.requireFirstName && !c.prenom) { rr.noFirstName++; continue; }
         const score = scoreCompany(c);
         if (score < options.minScore) { rr.lowScore++; continue; }

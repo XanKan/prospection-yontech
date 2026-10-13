@@ -502,6 +502,16 @@ export function isDirectoryHost(host: string) {
   return DIRECTORY_HOSTS.test(String(host || "").toLowerCase());
 }
 
+// Domaine d'une adresse e-mail quand il s'agit d'un domaine d'entreprise
+// (pas une messagerie grand public ni un fournisseur) : il désigne
+// probablement le site de l'entreprise. Vide sinon.
+const FREE_MAIL_RE = /^(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|orange|wanadoo|free|sfr|neuf|laposte|bbox|numericable|icloud|me|mac|aol|gmx|protonmail|proton|cegetel|club-internet|aliceadsl|nordnet|voila|skynet|tiscali|9online|libertysurf|mail|email)\.(fr|com|net|org|be|ch|eu)$/i;
+export function companyDomainOf(email: string) {
+  const domain = String(email || "").toLowerCase().split("@")[1] || "";
+  if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain) || FREE_MAIL_RE.test(domain)) return "";
+  return domain;
+}
+
 // Déchiffre les obfuscations courantes (« contact [at] exemple.fr », entités HTML).
 function deobfuscate(html: string) {
   return String(html || "")

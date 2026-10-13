@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import {
   BRAND, niceCompany, templateVars, renderTemplate, unknownVariables, composeEmail, classifySmtpError, retryDelaySeconds,
   normalizeTarget, sireneParams, normalizeCompany, scoreCompany, companyToQueueItem, maskEmail, youtubeId, metierFor,
-  nameWords, domainCandidates, extractEmails, verifyPage, secondaryLinks, isDirectoryHost, DEFAULT_SECTIONS, SECTIONS, targetKey, pickTemplates,
+  nameWords, domainCandidates, extractEmails, verifyPage, secondaryLinks, isDirectoryHost, DEFAULT_SECTIONS, SECTIONS, targetKey, pickTemplates, companyDomainOf,
 } from '../supabase/functions/_shared/yontech-core.ts';
 
 // Raisons sociales SIRENE en capitales : écrites comme à la main.
@@ -162,6 +162,13 @@ company.sansSite = true; company.source = 'rge';
 assert.equal(companyToQueueItem(company, 50).data.sanssite, '1');
 assert.equal(companyToQueueItem(company, 50).data.source, 'rge');
 company.sansSite = false; company.source = 'sirene';
+
+// Domaine d'entreprise dans une adresse e-mail : indice d'un site existant.
+assert.equal(companyDomainOf('audrey.billebaud@cegelec.com'), 'cegelec.com');
+assert.equal(companyDomainOf('secretariatgpr@orange.fr'), '', 'messagerie grand public');
+assert.equal(companyDomainOf('contact@gmail.com'), '');
+assert.equal(companyDomainOf('contact@wanadoo.fr'), '');
+assert.equal(companyDomainOf('pas-une-adresse'), '');
 
 // Marque : rien ne renvoie vers l'outil Piloz.
 assert.equal(BRAND.name, 'Yontech');
