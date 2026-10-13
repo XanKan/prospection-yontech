@@ -159,14 +159,20 @@ export function textToHtml(text: string, tracking?: Tracking) {
 
 export type ComposeInput = {
   subject: string; body: string; signature?: string; footerIdentity?: string;
-  unsubscribeUrl: string; vars: Vars; videoUrl?: string; tracking?: Tracking; logoUrl?: string;
+  unsubscribeUrl: string; vars: Vars; videoUrl?: string; videoThumb?: string; tracking?: Tracking; logoUrl?: string;
   // Origine de la fiche (« sirene » ou « rge ») : change la mention légale.
   source?: string;
 };
 
-function videoBlock(url: string, tracking?: Tracking) {
+export function youtubeThumb(url: string, size: "maxresdefault" | "hqdefault" = "hqdefault") {
   const id = youtubeId(url);
-  const thumb = id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
+  return id ? `https://i.ytimg.com/vi/${id}/${size}.jpg` : "";
+}
+
+function videoBlock(url: string, tracking?: Tracking, thumbUrl?: string) {
+  // Miniature : la version 16:9 (maxresdefault) quand l'expéditeur l'a
+  // vérifiée, sinon hqdefault (4:3, toujours disponible).
+  const thumb = thumbUrl || youtubeThumb(url);
   const href = htmlEscape(trackedUrl(url, tracking));
   return {
     text: `▶ Yontech en 1 minute : ${url}`,
@@ -206,7 +212,7 @@ export function composeEmail(input: ComposeInput) {
   const before = tidy(parts[0] || ""), after = tidy(parts.slice(1).join("\n"));
   const body = [before, after].filter(Boolean).join("\n\n");
   const tracking = input.tracking;
-  const video = input.videoUrl ? videoBlock(input.videoUrl, tracking) : null;
+  const video = input.videoUrl ? videoBlock(input.videoUrl, tracking, input.videoThumb) : null;
   const signature = String(input.signature ?? "").replace(/\r\n/g, "\n").trim();
   const company = input.vars.entreprise || "votre entreprise";
   const notice = `${dataNotice(company, input.source)} Pour ne plus recevoir de message de notre part : ${input.unsubscribeUrl}`;

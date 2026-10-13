@@ -1,5 +1,5 @@
 import nodemailer from "npm:nodemailer@6.10.1";
-import { BRAND, classifySmtpError, composeEmail, htmlEscape, retryDelaySeconds, type SmtpOutcome, type Vars } from "./yontech-core.ts";
+import { BRAND, classifySmtpError, composeEmail, htmlEscape, retryDelaySeconds, youtubeThumb, type SmtpOutcome, type Vars } from "./yontech-core.ts";
 
 // Envoi SMTP depuis la boîte Hostinger de Yontech. Les fonctions Supabase
 // bloquent les ports 25 et 587 : seul le port 465 (TLS implicite) est utilisable.
@@ -54,15 +54,35 @@ export type DeliveryResult =
   | { ok: true; subject: string; body: string; messageId: string }
   | { ok: false; outcome: SmtpOutcome; error: string; subject: string; body: string; retrySeconds?: number };
 
+// Miniature YouTube en 16:9 si elle existe (miniature personnalisée) ; vérifiée
+// une fois par heure, sinon repli sur la version 4:3.
+const thumbCache = new Map<string, { url: string; at: number }>();
+export async function resolveVideoThumb(videoUrl: string): Promise<string> {
+  if (!videoUrl) return "";
+  const hit = thumbCache.get(videoUrl);
+  if (hit && Date.now() - hit.at < 3_600_000) return hit.url;
+  let url = youtubeThumb(videoUrl);
+  const maxres = youtubeThumb(videoUrl, "maxresdefault");
+  if (maxres) {
+    try {
+      const response = await fetch(maxres, { method: "HEAD", signal: AbortSignal.timeout(4000) });
+      if (response.ok && Number(response.headers.get("content-length") || 0) > 5000) url = maxres;
+    } catch { /* repli silencieux sur hqdefault */ }
+  }
+  thumbCache.set(videoUrl, { url, at: Date.now() });
+  return url;
+}
+
 export async function deliver(input: {
   settings: SenderSettings; template: MailTemplate; to: string; vars: Vars; token: string;
   trackingToken?: string; subjectPrefix?: string; inReplyTo?: string; source?: string;
 }): Promise<DeliveryResult> {
   const links = unsubscribeLinks(input.token);
+  const videoThumb = await resolveVideoThumb(input.settings.video_url || "");
   const mail = composeEmail({
     subject: input.template.subject, body: input.template.body, signature: input.settings.signature,
     footerIdentity: input.settings.footer_identity, unsubscribeUrl: links.page, vars: input.vars,
-    videoUrl: input.settings.video_url || "", source: input.source,
+    videoUrl: input.settings.video_url || "", videoThumb, source: input.source,
     tracking: input.trackingToken ? { base: trackingBase(), token: input.trackingToken } : undefined,
     logoUrl: Deno.env.get("YONTECH_LOGO_URL") ?? BRAND.logo,
   });

@@ -1015,7 +1015,7 @@ function buildEmail(tpl, s, data){
   const parts = String(tpl.body || "").replace(/\r\n/g, "\n").split(/^[ \t]*\{video\}[ \t]*$/m);
   const before = tidy(parts[0] || ""), after = tidy(parts.slice(1).join("\n"));
   const url = s.video_url || "", id = youtubeId(url);
-  const thumb = id ? "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg" : "";
+  const thumb = id ? "https://i.ytimg.com/vi/" + id + "/maxresdefault.jpg" : "";
   const video = url ? (thumb ? '<p style="margin:4px 0 6px"><a href="' + hesc(url) + '" style="text-decoration:none"><img src="' + hesc(thumb) + '" width="480" alt="Vidéo : Yontech en 1 minute" style="display:block;width:100%;max-width:480px;height:auto;border:0;border-radius:12px"></a></p>' : "") +
     '<p style="margin:0 0 16px;font-size:14px"><a href="' + hesc(url) + '" style="color:' + ACCENT + ';font-weight:bold">▶ Yontech en 1 minute</a></p>' : "";
   const lines = String(s.signature || "").replace(/\r\n/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
