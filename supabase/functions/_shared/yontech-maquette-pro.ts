@@ -59,6 +59,8 @@ const FONTS: Fonts[] = [
   { link: "family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700", display: '"Barlow Condensed","Arial Narrow",sans-serif', body: '"Barlow",system-ui,sans-serif', weight: 700, upper: false, track: "0" },
   { link: "family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700", display: '"Fraunces",Georgia,serif', body: '"Inter",system-ui,sans-serif', weight: 700, upper: false, track: "-.01em" },
   { link: "family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700", display: '"Sora",system-ui,sans-serif', body: '"Inter",system-ui,sans-serif', weight: 700, upper: false, track: "-.02em" },
+  { link: "family=Playfair+Display:wght@600;700&family=Source+Sans+3:wght@400;500;600;700", display: '"Playfair Display",Georgia,serif', body: '"Source Sans 3",system-ui,sans-serif', weight: 700, upper: false, track: "-.005em" },
+  { link: "family=Archivo:wdth,wght@75..100,700..900&family=Archivo:wght@400;500;600", display: '"Archivo","Arial Narrow",sans-serif', body: '"Archivo",system-ui,sans-serif', weight: 800, upper: false, track: "-.02em" },
 ];
 const GENERIC_STEPS = [
   { title: "On vous écoute", text: "Vous nous décrivez votre projet par téléphone ou via le formulaire." },
@@ -68,6 +70,8 @@ const GENERIC_STEPS = [
 ];
 
 export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number }): { home: string; pages: { path: string; html: string }[] } {
+  // Direction artistique de l'IA si elle existe, sinon le tirage de la maquette.
+  const dz = input.copy?.design || null;
   const e = htmlEscape;
   const d = input, c = input.copy || null;
   const accent = /^#[0-9a-f]{6}$/i.test(d.accent) ? d.accent : "#1e5aa8";
@@ -79,7 +83,7 @@ export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number
   const sky = `hsl(${h} ${Math.min(45, s)}% 95%)`;
   const paper = d.theme === "atelier" ? "#fbf9f5" : `hsl(${h} 20% 99%)`;
   const line = `hsl(${h} ${Math.min(25, s)}% 88%)`;
-  const F = FONTS[d.theme === "atelier" ? 2 : d.theme === "chantier" ? (opts.font % 2 ? 1 : 0) : (opts.font % 2 ? 3 : 0)];
+  const F = dz ? FONTS[dz.font] || FONTS[0] : FONTS[d.theme === "atelier" ? 2 : d.theme === "chantier" ? (opts.font % 2 ? 1 : 0) : (opts.font % 2 ? 3 : 0)];
   const tel = d.phone ? "tel:" + d.phone.replace(/\s/g, "") : "";
   const cp0 = () => (d.address.match(/\b\d{5}\b/) || [])[0] || d.cp || "";
   const year = new Date().getFullYear();
@@ -121,7 +125,10 @@ export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number
   const cp = (d.address.match(/\b\d{5}\b/) || [])[0] || d.cp || "";
   const mapQ = /\b\d{5}\b/.test(d.address) ? `${d.address}, France` : d.city ? `${[cp, d.city].filter(Boolean).join(" ")}, France` : "";
   const mapEnc = encodeURIComponent(mapQ);
-  const dark = opts.hero === "b";
+  const heroMode: "chiffres" | "atouts" | "colonnes" = dz ? dz.hero : opts.hero === "b" ? "atouts" : "chiffres";
+  const dark = heroMode === "atouts";
+  const servicesMode = dz?.services || "cartes";
+  const galleryMode = dz?.gallery || "mosaique";
   const brand = d.logo
     ? `<img onerror="yf(this)" crossorigin="anonymous" src="${e(px(d.logo))}" alt="${e(d.name)}" data-logo><span class="mono" hidden>${e(initials)}</span>`
     : `<span class="mono">${e(initials)}</span><span class="bname">${e(d.name)}</span>`;
@@ -236,9 +243,26 @@ footer{background:${inkCol};color:rgba(255,255,255,.7);font-size:.95rem}
 .prose p{margin:0 0 16px}.prose ul{padding-left:20px;margin:0 0 18px}.prose li{margin:4px 0}.prose figure{margin:26px 0;border-radius:var(--r);overflow:hidden}.prose figure img{width:100%;max-height:480px;object-fit:cover}
 .aside{position:sticky;top:100px;display:grid;gap:16px}.aside .box{padding:24px}.aside h3{margin-bottom:8px}.aside p{color:var(--ink-soft);font-size:.95rem;margin-bottom:14px}
 .aside ul{list-style:none;padding:0;margin:0}.aside li a{display:block;padding:9px 0;border-bottom:1px solid var(--line);text-decoration:none;font-weight:600}.aside li a.on{color:var(--sun-ink)}
+.hcol{padding-block:64px 70px;background:radial-gradient(800px 400px at 100% 0%,var(--sky),transparent 70%)}
+.hcol-in{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.hcol h1{font-size:clamp(2.3rem,1.4rem + 3.4vw,4rem);font-weight:${F.weight};margin:6px 0 18px}.hcol .lead{font-size:1.15rem;color:var(--ink-soft);max-width:34em}
+.hcol .btn-out{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.hcol-img{position:relative}.hcol-img img,.hcol-img .ph-box{width:100%;aspect-ratio:4/4.4;object-fit:cover;border-radius:calc(var(--r) * 1.6);box-shadow:0 40px 70px -40px rgba(0,0,0,.45)}
+.hcol-img:before{content:"";position:absolute;inset:24px -18px -18px 24px;border-radius:calc(var(--r) * 1.6);background:var(--sun);opacity:.16;z-index:-1}
+.ph-box{display:grid;place-items:center;background:linear-gradient(135deg,var(--sun),var(--ink));color:#fff;font:800 80px var(--fd)}
+.hstats{display:flex;gap:34px;flex-wrap:wrap;margin-top:34px;padding-top:24px;border-top:1px solid var(--line)}.hstats b{display:block;font-family:var(--fd);font-size:1.7rem;color:var(--sun-ink)}.hstats span{font-size:.9rem;color:var(--ink-soft)}
+.lines{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.ln{position:relative;display:grid;grid-template-columns:60px minmax(0,1fr) minmax(0,1.2fr) 36px;gap:22px;align-items:center;padding:26px 0;border-bottom:1px solid var(--line);text-decoration:none;transition:padding .3s}
+.ln .no{font-family:ui-monospace,Menlo,monospace;color:var(--ink-soft)}.ln h3{font-size:clamp(1.3rem,1rem + 1vw,1.8rem)}.ln .tag{display:block;margin-top:6px;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--sun-ink)}
+.ln p{color:var(--ink-soft);font-size:.97rem}.ln .go{color:var(--sun-ink);transition:transform .3s}
+.ln .lpv{position:absolute;right:70px;top:50%;width:200px;height:136px;object-fit:cover;border-radius:12px;transform:translateY(-50%) rotate(-3deg) scale(.9);opacity:0!important;pointer-events:none;transition:opacity .3s,transform .3s;box-shadow:0 20px 40px -20px rgba(0,0,0,.5)}
+a.ln:hover{padding-left:12px}a.ln:hover .go{transform:translateX(6px)}a.ln:hover .lpv.ok{opacity:1!important;transform:translateY(-50%) rotate(-3deg) scale(1)}
+.svcs.big{grid-template-columns:repeat(2,1fr)}.svcs.big .svc-img{aspect-ratio:16/9}.svcs.big h3{font-size:1.5rem}
+.gal.strip{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;padding-bottom:10px;grid-template-columns:none}.gal.strip figure{flex:0 0 min(420px,80%);height:340px;scroll-snap-align:start}
 .rv{opacity:0;transform:translateY(18px);transition:opacity .7s,transform .7s}.rv.in{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
-@media (max-width:980px){.menu,.phone-top{display:none}.burger{display:flex}.top .btn-sun{display:none}
+@media (max-width:980px){.hcol-in{grid-template-columns:1fr}.ln{grid-template-columns:44px 1fr 28px}.ln p,.ln .lpv{display:none}.svcs.big{grid-template-columns:1fr}
+ .menu,.phone-top{display:none}.burger{display:flex}.top .btn-sun{display:none}
  .top.open .menu{display:flex;position:absolute;left:0;right:0;top:100%;flex-direction:column;gap:0;background:${dark ? `hsl(${h} 30% 10%)` : "var(--paper)"};padding:8px 20px 16px;border-bottom:1px solid var(--line)}
  .top.open .menu a{padding:12px 0}
  .head,.about,.ct,.ft,.art{grid-template-columns:1fr}.svcs,.cols{grid-template-columns:1fr 1fr}.steps{grid-template-columns:1fr 1fr;row-gap:36px}.step:after{display:none}
@@ -264,7 +288,11 @@ ${d.phone ? `<a class="phone-top" href="${e(tel)}">${e(d.phone)}</a>` : ""}<a cl
 </div></header>
 `;
 
-  const heroHtml = `<section class="hero${heroImg ? "" : " flat"}" id="accueil">${heroImg ? img(heroImg, d.name, "hero-img", false) : ""}<div class="hero-shade"></div>
+  const heroHtml = heroMode === "colonnes" ? `<section class="hcol" id="accueil"><div class="wrap hcol-in"><div>${kicker ? `<p class="eyebrow rv">${e(kicker)}</p>` : ""}<h1 class="rv">${e(title)}</h1>${lead ? `<p class="lead rv">${e(lead)}</p>` : ""}
+<div class="hero-cta rv"><a class="btn btn-sun" href="#contact">${e(cta)}</a>${d.phone ? `<a class="btn btn-out" href="${e(tel)}">${icon("phone", 16)}${e(d.phone)}</a>` : ""}</div>
+${stats.length ? `<div class="hstats rv">${stats.slice(0, 3).map((x) => `<div><b>${e(x.value)}</b><span>${e(x.label)}</span></div>`).join("")}</div>` : ""}</div>
+<div class="hcol-img rv">${heroImg ? img(heroImg, d.name, "hero-img", false) : `<div class="ph-box">${e(initials)}</div>`}</div></div></section>
+` : `<section class="hero${heroImg ? "" : " flat"}" id="accueil">${heroImg ? img(heroImg, d.name, "hero-img", false) : ""}<div class="hero-shade"></div>
 <div class="wrap hero-in">${kicker ? `<p class="hero-kicker rv">${e(kicker)}</p>` : ""}<h1 class="rv">${e(title)}</h1>${lead ? `<p class="hero-lead rv">${e(lead)}</p>` : ""}
 <div class="hero-cta rv"><a class="btn btn-sun" href="#contact">${e(cta)}</a>${gallery.length >= 3 ? `<a class="btn btn-light" href="#realisations">Voir nos réalisations</a>` : services.length ? `<a class="btn btn-light" href="#prestations">Nos prestations</a>` : ""}</div></div></section>
 ${dark && highlights.length ? `<div class="hl"><div class="wrap"><div class="grid">${highlights.map((x, i) => `<div class="it"><h3>${icon(["pin", "star", "shield"][i % 3], 18)}${e(x.title)}</h3><p>${e(x.text)}</p></div>`).join("")}</div></div></div>`
@@ -273,7 +301,8 @@ ${dark && highlights.length ? `<div class="hl"><div class="wrap"><div class="gri
 
   const servicesHtml = services.length ? `<section class="sec" id="prestations"><div class="wrap">
 <div class="head"><div><p class="eyebrow">Nos prestations</p>${H2(c?.servicesTitle || "Ce que nous faisons pour vous")}</div>${c?.servicesLead ? `<p>${e(c.servicesLead)}</p>` : ""}</div>
-<div class="svcs">${services.map((x) => `<${x.link ? `a href="${e(x.link)}"` : "article"} class="svc rv">${x.image ? img(x.image, x.title, "svc-img") : '<div class="noimg"></div>'}${x.tag ? `<span class="tag">${e(x.tag)}</span>` : ""}<h3>${e(x.title)}</h3>${x.text ? `<p>${e(x.text)}</p>` : ""}${x.bullets.length ? `<ul>${x.bullets.map((b) => `<li>${e(b)}</li>`).join("")}</ul>` : ""}${x.link ? `<span class="more">En savoir plus ${icon("arrow", 15)}</span>` : ""}</${x.link ? "a" : "article"}>`).join("")}</div>
+${servicesMode === "lignes" ? `<ol class="lines">${services.map((x, i) => `<li class="rv"><${x.link ? `a href="${e(x.link)}"` : "div"} class="ln"><span class="no">${String(i + 1).padStart(2, "0")}</span><div class="lt"><h3>${e(x.title)}</h3>${x.tag ? `<span class="tag">${e(x.tag)}</span>` : ""}</div><p>${e(x.text)}</p>${x.image ? img(x.image, x.title, "lpv") : ""}<span class="go">${icon("arrow", 20)}</span></${x.link ? "a" : "div"}></li>`).join("")}</ol>` : ""}
+<div class="svcs${servicesMode === "grandes" || services.length === 2 || services.length === 4 ? " big" : ""}"${servicesMode === "lignes" ? " hidden" : ""}>${services.map((x) => `<${x.link ? `a href="${e(x.link)}"` : "article"} class="svc rv">${x.image ? img(x.image, x.title, "svc-img") : '<div class="noimg"></div>'}${x.tag ? `<span class="tag">${e(x.tag)}</span>` : ""}<h3>${e(x.title)}</h3>${x.text ? `<p>${e(x.text)}</p>` : ""}${x.bullets.length ? `<ul>${x.bullets.map((b) => `<li>${e(b)}</li>`).join("")}</ul>` : ""}${x.link ? `<span class="more">En savoir plus ${icon("arrow", 15)}</span>` : ""}</${x.link ? "a" : "article"}>`).join("")}</div>
 ${c?.extras.length ? `<div class="chips">${c.extras.map((x) => `<span>${e(x)}</span>`).join("")}</div>` : ""}
 </div></section>` : "";
 
@@ -290,7 +319,7 @@ ${c?.extras.length ? `<div class="chips">${c.extras.map((x) => `<span>${e(x)}</s
   const gal = gallery.slice(0, gallery.length >= 5 ? 5 : 3);
   const galleryHtml = gal.length >= 3 ? `<section class="sec" id="realisations"><div class="wrap">
 <div class="head"><div><p class="eyebrow">Réalisations</p>${H2(c?.galleryTitle || "Nos réalisations")}</div></div>
-<div class="gal${gal.length === 3 ? " g3" : ""}">${gal.map((g, i) => `<figure class="${i === 0 ? "wide" : ""} rv">${img(g, c?.captions[i] || `Réalisation ${d.name}`)}${c?.captions[i] ? `<figcaption>${e(c.captions[i])}</figcaption>` : ""}</figure>`).join("")}</div>
+<div class="gal${galleryMode === "bande" ? " strip" : gal.length === 3 ? " g3" : ""}">${(galleryMode === "bande" ? gallery : gal).map((g, i) => `<figure class="${i === 0 ? "wide" : ""} rv">${img(g, c?.captions[i] || `Réalisation ${d.name}`)}${c?.captions[i] ? `<figcaption>${e(c.captions[i])}</figcaption>` : ""}</figure>`).join("")}</div>
 </div></section>` : "";
 
   const aboutHtml = aboutText ? `<section class="sec sky" id="entreprise"><div class="wrap about">
@@ -336,7 +365,9 @@ setTimeout(function(){[].forEach.call(document.querySelectorAll('img[data-ph]'),
 var lg=document.querySelector('[data-logo]');function chk(){if(!lg||!lg.naturalWidth)return;if(lg.naturalWidth<40){yf(lg);return}${dark ? "" : "try{var c=document.createElement('canvas'),w=c.width=Math.min(120,lg.naturalWidth),hh=c.height=Math.max(1,Math.round(w*lg.naturalHeight/lg.naturalWidth)),x=c.getContext('2d');x.drawImage(lg,0,0,w,hh);var d=x.getImageData(0,0,w,hh).data,n=0,l=0;for(var k=0;k<d.length;k+=4){if(d[k+3]>60){n++;l+=(.2126*d[k]+.7152*d[k+1]+.0722*d[k+2])/255}}if(n>20&&l/n>.86)lg.parentNode.classList.add('dark')}catch(e){}"}}if(lg){if(lg.complete)chk();else lg.addEventListener('load',chk)}
 })();</script></body></html>`;
 
-  const home = head(e(d.name) + (kicker ? " · " + e(kicker) : ""), e(lead), "/") + heroHtml + servicesHtml + bandHtml + stepsHtml + galleryHtml + aboutHtml + certsHtml + ctaHtml + contactHtml + tail;
+  const blocks: Record<string, string> = { services: servicesHtml, band: bandHtml, steps: stepsHtml, gallery: galleryHtml, about: aboutHtml, certs: certsHtml };
+  const order = [...(dz?.order || []), ...Object.keys(blocks)].filter((k, i, a) => a.indexOf(k) === i && blocks[k] !== undefined);
+  const home = head(e(d.name) + (kicker ? " · " + e(kicker) : ""), e(lead), "/") + heroHtml + order.map((k) => blocks[k]).join("") + ctaHtml + contactHtml + tail;
 
   const prose = (blocks: Block[]) => {
     let out = "", list: string[] = [];

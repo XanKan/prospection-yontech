@@ -18,7 +18,10 @@ export type Copy = {
   galleryTitle: string; captions: string[];
   aboutTitle: string; aboutText: string; bigValue: string; bigLabel: string; points: { title: string; text: string }[];
   ctaTitle: string; ctaText: string;
+  // Direction artistique choisie pour cette entreprise.
+  design: { hero: "chiffres" | "atouts" | "colonnes"; font: number; services: "cartes" | "lignes" | "grandes"; gallery: "mosaique" | "bande"; order: string[] } | null;
 };
+export const SECTION_KEYS = ["services", "band", "steps", "gallery", "about", "certs"];
 
 const MODEL = "claude-sonnet-5-5";
 const cut = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -69,8 +72,16 @@ Réponds UNIQUEMENT par un objet JSON valide, de cette forme :
  "galleryTitle": "titre", "captions": ["légende courte pour chaque photo, d'après son nom de fichier, ou vide si on ne peut pas savoir"],
  "aboutTitle": "titre", "aboutText": "60 mots max", "bigValue": "un chiffre fort de la source ou vide", "bigLabel": "ce qu'il mesure",
  "points": [{"title":"2 à 4 mots","text":"1 phrase"}],   // 3 à 5 atouts tirés de la source
- "ctaTitle": "question ou invitation courte", "ctaText": "1 phrase"
+ "ctaTitle": "question ou invitation courte", "ctaText": "1 phrase",
+ "design": {
+   "hero": "chiffres" | "atouts" | "colonnes",      // chiffres : photo + bande de chiffres (si stats) ; atouts : photo + 3 cartes ; colonnes : texte à gauche, photo à droite (sobre, artisanal)
+   "font": 0 à 5,   // 0 Bricolage Grotesque (moderne, chaleureux) · 1 Barlow Condensed (chantier, industriel) · 2 Fraunces (artisan, patrimoine) · 3 Sora (technique, précis) · 4 Playfair Display (haut de gamme, décoration) · 5 Archivo (robuste, BTP)
+   "services": "cartes" | "lignes" | "grandes",    // cartes : grille 3 colonnes ; lignes : liste éditoriale numérotée ; grandes : 2 colonnes, grandes photos (peu de prestations)
+   "gallery": "mosaique" | "bande",
+   "order": ["services","band","steps","gallery","about","certs"]   // ordre des sections, adapté à ce qui met le mieux en valeur cette entreprise
+ }
 }
+Choisis la direction artistique en fonction du métier, du positionnement et du contenu disponible, pour que chaque site soit différent et cohérent avec l'entreprise.
 
 CONTENU EXTRAIT DU SITE ACTUEL :
 ${sourceText(d, extra)}`;
@@ -104,6 +115,13 @@ ${sourceText(d, extra)}`;
       aboutTitle: cut(json.aboutTitle, 70), aboutText: cut(json.aboutText, 480), bigValue: cut(json.bigValue, 14), bigLabel: cut(json.bigLabel, 60),
       points: arr(json.points, 5, (x) => x.title ? { title: cut(x.title, 40), text: cut(x.text, 160) } : null),
       ctaTitle: cut(json.ctaTitle, 80), ctaText: cut(json.ctaText, 200),
+      design: json.design && typeof json.design === "object" ? {
+        hero: ["chiffres", "atouts", "colonnes"].includes(json.design.hero) ? json.design.hero : "chiffres",
+        font: Number.isInteger(json.design.font) && json.design.font >= 0 && json.design.font <= 5 ? json.design.font : 0,
+        services: ["cartes", "lignes", "grandes"].includes(json.design.services) ? json.design.services : "cartes",
+        gallery: ["mosaique", "bande"].includes(json.design.gallery) ? json.design.gallery : "mosaique",
+        order: Array.isArray(json.design.order) ? [...new Set((json.design.order as unknown[]).map(String).filter((k) => SECTION_KEYS.includes(k)))] : [],
+      } : null,
     };
     return copy.title && copy.services.length ? copy : null;
   } catch (error) {

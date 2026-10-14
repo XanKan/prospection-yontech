@@ -209,6 +209,18 @@ function absolute(value: string | null | undefined, base: string) {
   try { const u = new URL(v, base); return /^https?:$/.test(u.protocol) ? u.toString() : ""; } catch { return ""; }
 }
 
+// Adresse d'image d'un élément, quel que soit le chargement différé utilisé
+// (srcset, data-src, data-lazyload, data-lazyloadSrc, data-bg…).
+const IMG_EXT = /\.(jpe?g|png|webp|avif)(\?|#|$)/i;
+function imageAttr(el: Element) {
+  const srcset = largestFromSrcset(el.getAttribute("srcset") || el.getAttribute("data-srcset"));
+  if (srcset) return srcset;
+  for (const a of Array.from(el.attributes || [])) {
+    if (/^data-/i.test(a.name) && IMG_EXT.test(a.value) && !/\s/.test(a.value.trim())) return a.value.trim();
+  }
+  return el.getAttribute("src") || "";
+}
+
 function largestFromSrcset(srcset: string | null | undefined) {
   let best = "", bestW = -1;
   for (const part of String(srcset || "").split(",")) {
@@ -392,8 +404,9 @@ function collect(doc: Doc, raw: Raw) {
     if (!url || images.some((i) => i.url === url)) return;
     images.push({ url, w, logo, header });
   };
-  for (const img of [...doc.querySelectorAll("img, source")].slice(0, 150)) {
-    const src = largestFromSrcset(img.getAttribute("srcset") || img.getAttribute("data-srcset")) || img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || img.getAttribute("data-original") || img.getAttribute("src") || "";
+  const lazyEls = [...doc.querySelectorAll("[data-lazyload],[data-bg],[data-background],[data-background-image],[data-image],[data-img],[data-lazy],[data-src],[data-original]")].filter((el) => el.tagName !== "IMG" && el.tagName !== "SOURCE");
+  for (const img of [...doc.querySelectorAll("img, source"), ...lazyEls].slice(0, 180)) {
+    const src = imageAttr(img);
     const hint = [src, img.getAttribute("alt"), img.getAttribute("class"), img.getAttribute("id"), img.parentElement?.getAttribute("class")].join(" ");
     const w = Number(img.getAttribute("width") || 0);
     const isLogo = /logo/i.test(hint), inHeader = !!img.closest?.("header, .header, #header, .site-header, .elementor-location-header");
@@ -402,6 +415,8 @@ function collect(doc: Doc, raw: Raw) {
   }
   for (const m of raw.html.matchAll(/background(?:-image)?\s*:\s*url\(\s*['"]?([^'")]+)['"]?\s*\)/gi)) pushImg(m[1], 0, false, false);
   const og = absolute(meta('meta[property="og:image"]'), base);
+  // Image préchargée par le site (rel=preload as=image) : sa photo d'accroche.
+  const preload = [...doc.querySelectorAll('link[rel="preload"][as="image"]')].map((l) => absolute(l.getAttribute("href"), base)).filter((u) => u && IMG_EXT.test(u));
 
   const tels = [...doc.querySelectorAll('a[href^="tel:"]')].map((a) => frenchPhone(a.getAttribute("href") || "")).filter(Boolean);
   const bodyText = clean(doc.body?.textContent, 60_000);
@@ -423,7 +438,7 @@ function collect(doc: Doc, raw: Raw) {
     siteName: meta('meta[property="og:site_name"]'),
     description: meta('meta[name="description"]') || meta('meta[property="og:description"]'),
     themeColor: meta('meta[name="theme-color"]'),
-    org, headings, paragraphs, navItems, images, og, tels, bodyText, socials, stylesheets, links,
+    org, headings, paragraphs, navItems, images, og, preload, tels, bodyText, socials, stylesheets, links,
     mailtos: [...doc.querySelectorAll('a[href^="mailto:"]')].map((a) => clean((a.getAttribute("href") || "").slice(7).split("?")[0], 120).toLowerCase()),
   };
 }
@@ -547,7 +562,7 @@ function menuLinks(doc: Doc, raw: Raw) {
   return out;
 }
 
-const IMG_SKIP = /logo|icon|favicon|sprite|pixel|avatar|gravatar|emoji|flag|drapeau|badge|payment|paiement|visa|mastercard|loader|spinner|placeholder|blank|arrow|fleche|picto|qualibat|label|certif|partenaire|\.svg|\.gif|google|facebook|instagram|linkedin|youtube|tripadvisor|pagesjaunes|laur[ée]at|troph[ée]e|award|r[ée]seau[-_]entreprendre|prix[-_]|medaille|m[ée]daille|banniere|banner-ad/i;
+const IMG_SKIP = /logo|icon|favicon|sprite|pixel|avatar|gravatar|emoji|flag|drapeau|badge|payment|paiement|visa|mastercard|loader|spinner|placeholder|blank|arrow|fleche|picto|qualibat|label|certif|partenaire|\.svg|\.gif|google|facebook|instagram|linkedin|youtube|tripadvisor|pagesjaunes|laur[ée]at|troph[ée]e|award|r[ée]seau[-_]entreprendre|prix[-_]|medaille|m[ée]daille|banner-ad|pub[-_]/i;
 
 // Contenu d'une page dans l'ordre de lecture : titres, paragraphes, listes,
 // images (hors menu, en-tête, pied de page et bandeaux).
@@ -561,7 +576,7 @@ function contentBlocks(doc: Doc, base: string) {
     const tag = el.tagName.toLowerCase();
     if (tag === "img") {
       if (inImageZone(el, new URL(base).hostname)) continue;
-      const src = absolute(largestFromSrcset(el.getAttribute("srcset") || el.getAttribute("data-srcset")) || el.getAttribute("data-src") || el.getAttribute("data-lazy-src") || el.getAttribute("src") || "", base);
+      const src = absolute(imageAttr(el), base);
       const w = Number(el.getAttribute("width") || 0);
       if (!src || seen.has(src) || IMG_SKIP.test(src + " " + (el.getAttribute("alt") || "") + " " + (el.getAttribute("class") || "")) || (w && w < 300)) continue;
       seen.add(src); blocks.push({ t: "img", v: src });
@@ -738,7 +753,13 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
 
   // Couleur : variables et styles de la page, puis feuilles de style du site.
   let css = home.css;
-  if (!c.themeColor) for (const sheet of c.stylesheets.slice(0, 3)) css += "\n" + await fetchText(sheet);
+  // Feuilles de style propres au site (Elementor en premier) : couleur de marque
+  // et images de fond des sections, souvent les plus belles photos du site.
+  const sheets = [...c.stylesheets].sort((x, y) => Number(/elementor\/css\/post-\d+/.test(y)) - Number(/elementor\/css\/post-\d+/.test(x))).slice(0, 3);
+  const sheetTexts = await Promise.all(sheets.map((u) => fetchText(u)));
+  for (const t of sheetTexts) css += "\n" + t;
+  const cssImages: string[] = [];
+  sheetTexts.forEach((t, i) => { for (const m of t.matchAll(/background(?:-image)?\s*:[^;}]*?url\(\s*['"]?([^'")]+\.(?:jpe?g|png|webp|avif)[^'")]*)['"]?\s*\)/gi)) { const u = absolute(m[1], sheets[i]); if (u && !cssImages.includes(u)) cssImages.push(u); } });
   const accent = pickAccent(css, c.themeColor);
 
   // Logo et photos (photos vérifiées : vraies images, assez lourdes).
@@ -751,7 +772,7 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
   const isPng = (u: string) => /\.png(\?|$)|format=png/i.test(u);
   const homeImgs = c.images.filter((i) => !i.logo && (!i.w || i.w >= 300)).map((i) => i.url);
   const pageImgs = subs.flatMap((x) => x.blocks.filter((b) => b.t === "img").map((b) => b.v));
-  let candidates = [...(c.og ? [c.og] : []), ...homeImgs, ...pageImgs].filter((u) => u && !IMG_SKIP.test(u) && u !== logo);
+  let candidates = [...c.preload, ...(c.og ? [c.og] : []), ...homeImgs, ...cssImages.slice(0, 12), ...pageImgs].filter((u) => u && !IMG_SKIP.test(u) && u !== logo);
   { const seenK = new Set<string>(); candidates = candidates.filter((u) => { const k = imgKey(u); if (seenK.has(k)) return false; seenK.add(k); return true; }).slice(0, 40); }
   const infos = await mapLimit(candidates, 8, (u) => imageInfo(u));
   const measured = candidates.map((u, i) => ({ u, ...infos[i] }));
@@ -771,7 +792,7 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
   const usedImg = new Set<string>();
   const take = (u?: string) => { if (u) usedImg.add(u); return u || ""; };
   const free = (u: string) => accepted.has(u) && !usedImg.has(u);
-  const heroScore = (x: { u: string; size: number; w: number; h: number }) => (x.w ? Math.min(x.w, 2200) * Math.min(x.h, 1400) : x.size * 4) * (x.w && x.w / x.h >= 1.2 ? 1.6 : 1) * (homeImgs.includes(x.u) || x.u === c.og ? 1.3 : 1) * (isPng(x.u) ? 0.5 : 1);
+  const heroScore = (x: { u: string; size: number; w: number; h: number }) => (x.w ? Math.min(x.w, 2200) * Math.min(x.h, 1400) : x.size * 4) * (x.w && x.w / x.h >= 1.2 ? 1.6 : 1) * (c.preload.includes(x.u) ? 2 : homeImgs.includes(x.u) || x.u === c.og ? 1.3 : 1) * (isPng(x.u) ? 0.5 : 1);
   const heroImage = take([...photos].sort((a, b) => heroScore(b) - heroScore(a))[0]?.u);
   const serviceImage = new Map<string, string>();
 
