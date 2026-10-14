@@ -139,7 +139,7 @@ export function trackingKind(url: string) {
   return youtubeId(url) ? "video" : "site";
 }
 
-function trackedUrl(url: string, tracking?: Tracking) {
+export function trackedUrl(url: string, tracking?: Tracking) {
   if (!tracking || /desinscription|unsubscribe/i.test(url)) return url;
   return `${tracking.base}?t=${encodeURIComponent(tracking.token)}&k=${trackingKind(url)}&u=${encodeURIComponent(url)}`;
 }
@@ -160,6 +160,8 @@ export function textToHtml(text: string, tracking?: Tracking) {
 export type ComposeInput = {
   subject: string; body: string; signature?: string; footerIdentity?: string;
   unsubscribeUrl: string; vars: Vars; videoUrl?: string; videoThumb?: string; tracking?: Tracking; logoUrl?: string;
+  // Bloc visuel (aperçu de maquette) placé à la ligne {maquette} ; remplace la vidéo.
+  block?: (tracking?: Tracking) => { html: string; text: string };
   // Origine de la fiche (« sirene » ou « rge ») : change la mention légale.
   source?: string;
 };
@@ -221,11 +223,12 @@ export function composeEmail(input: ComposeInput) {
   const tidy = (value: string) => renderTemplate(value, input.vars).replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
   // {video} seul sur sa ligne indique l'emplacement de la vidéo ; sans lui,
   // la vidéo se place après le message, avant la signature.
-  const parts = String(input.body ?? "").replace(/\r\n/g, "\n").split(/^[ \t]*\{video\}[ \t]*$/m);
+  const marker = input.block ? /^[ \t]*\{maquette\}[ \t]*$/m : /^[ \t]*\{video\}[ \t]*$/m;
+  const parts = String(input.body ?? "").replace(/\r\n/g, "\n").split(marker);
   const before = tidy(parts[0] || ""), after = tidy(parts.slice(1).join("\n"));
   const body = [before, after].filter(Boolean).join("\n\n");
   const tracking = input.tracking;
-  const video = input.videoUrl ? videoBlock(input.videoUrl, tracking, input.videoThumb) : null;
+  const video = input.block ? input.block(tracking) : input.videoUrl ? videoBlock(input.videoUrl, tracking, input.videoThumb) : null;
   const signature = String(input.signature ?? "").replace(/\r\n/g, "\n").trim();
   const company = input.vars.entreprise || "votre entreprise";
   const notice = `${dataNotice(company, input.source)} Pour ne plus recevoir de message de notre part : ${input.unsubscribeUrl}`;

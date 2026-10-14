@@ -347,6 +347,25 @@
     .hero{padding:18px 16px}
   }
   @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  /* Prospection maquette */
+  .mqp-item{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:16px;padding:16px 0;border-bottom:1px solid var(--line-2);align-items:start}
+  .mqp-item:last-child{border-bottom:0}
+  .mqp-shot{display:block;width:150px;border-radius:10px;overflow:hidden;border:1px solid var(--line);text-decoration:none;background:var(--paper)}
+  .mqp-shot img{width:100%;height:92px;object-fit:cover;display:block}
+  .mqp-shot span{display:block;padding:7px 9px;font-size:.72rem;font-weight:700;color:#fff;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .mqp-main{display:grid;gap:7px;min-width:0}
+  .mqp-main .who{font-weight:800}
+  .mqp-main .meta{font-size:.82rem;color:var(--muted);overflow-wrap:anywhere}
+  .mqp-main .meta a{color:var(--violet)}
+  .mqp-main input.inp{font-weight:600}
+  .mqp-main details summary{cursor:pointer;font-size:.82rem;font-weight:700;color:var(--violet)}
+  .mqp-acts{display:flex;flex-direction:column;gap:6px;min-width:170px}
+  .mqp-prev{grid-column:1/-1;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .mqp-prev .h{padding:9px 14px;font-size:.82rem;background:var(--paper);border-bottom:1px solid var(--line)}
+  .mqp-prev iframe{display:block;width:100%;height:640px;border:0}
+  .tagx{display:inline-block;font-size:.7rem;font-weight:800;padding:2px 7px;border-radius:99px;margin-left:6px;background:var(--line-2);color:var(--muted)}
+  .tagx.on{background:var(--ok-soft);color:var(--ok)}
+  @media (max-width:860px){ .mqp-item{grid-template-columns:1fr} .mqp-shot{width:100%} .mqp-shot img{height:150px} .mqp-acts{flex-direction:row;flex-wrap:wrap;min-width:0} }
   /* Maquettes de refonte */
   .mq-stage{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;justify-content:center;overflow:hidden}
   .mq-stage iframe{width:100%;height:720px;border:0;border-radius:8px;background:#fff;box-shadow:0 8px 24px -16px rgba(0,0,0,.4);transition:width .25s}
@@ -400,6 +419,7 @@
     </div>
     <nav class="side-nav">
       <button class="nav-b on" data-view="auto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg><span class="t">Automate</span></button>
+      <button class="nav-b" data-view="mqp"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/><path d="M15 17l2 2 4-4"/></svg><span class="t">Prospection maquette</span><span class="pill num" id="pillMqp" hidden>0</span></button>
       <button class="nav-b" data-view="maq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg><span class="t">Maquettes</span><span class="pill" style="background:var(--warn-soft);color:#8a5212">test</span></button>
       <div class="nav-sep">Paramètres</div>
       <button class="nav-b" data-view="target"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="t">Ciblage</span></button>
@@ -563,6 +583,54 @@
       </section>
 
       <!-- ==================== MESSAGES ==================== -->
+      <!-- ==================== PROSPECTION MAQUETTE (validation manuelle) ==================== -->
+      <section class="view" id="v-mqp">
+        <div id="mqpBanners"></div>
+        <div class="kpis" style="margin-top:0">
+          <div class="kpi ka"><div class="lab">À valider</div><div class="val num" id="mqpKPending">0</div><div class="foot">mails prêts, en attente de vous</div></div>
+          <div class="kpi kd"><div class="lab">Préparés aujourd'hui</div><div class="val num" id="mqpKToday">0</div><div class="foot" id="mqpKTodayF"></div></div>
+          <div class="kpi kb"><div class="lab">Envoyés</div><div class="val num" id="mqpKSent">0</div><div class="foot" id="mqpKSentF"></div></div>
+          <div class="kpi kc"><div class="lab">Maquette vue</div><div class="val num" id="mqpKViewed">0</div><div class="foot" id="mqpKViewedF"></div></div>
+          <div class="kpi ke"><div class="lab">Réponses</div><div class="val num" id="mqpKReplied">0</div><div class="foot">à rappeler en priorité</div></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="card-h"><h2>À valider</h2><span class="sub" id="mqpCount"></span>
+            <div class="right">
+              <button type="button" class="b b-out b-sm" id="bMqpPrep">Préparer maintenant</button>
+              <button type="button" class="b b-main b-sm" id="bMqpAll">Tout valider</button>
+            </div>
+          </div>
+          <div class="card-b">
+            <div id="mqpList"></div>
+            <p class="note" id="mqpEmpty" hidden>Aucun mail en attente. L'outil en prépare automatiquement chaque jour, ou cliquez « Préparer maintenant ».</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h2>Envoyés</h2><span class="sub" id="mqpSentCount"></span></div>
+          <div class="card-b" style="padding-top:6px;padding-bottom:6px">
+            <ul class="list" id="mqpSent"></ul>
+            <p class="note" id="mqpSentEmpty" hidden style="padding:10px 0">Rien d'envoyé pour l'instant.</p>
+          </div>
+        </div>
+
+        <form class="card" id="mqpForm">
+          <div class="card-h"><h2>Réglages</h2>
+            <div class="right"><label class="swi"><input type="checkbox" id="mqpOn"><i></i> Préparation automatique</label></div>
+          </div>
+          <div class="card-b">
+            <div class="fields">
+              <div class="fld" style="max-width:190px"><label for="mqpDaily">Maquettes préparées par jour</label><input class="inp num" type="number" id="mqpDaily" min="0" max="100"></div>
+            </div>
+            <div class="fld" style="margin-top:12px"><label for="mqpSubj">Objet du mail</label><input class="inp" id="mqpSubj" maxlength="200"></div>
+            <div class="fld" style="margin-top:12px"><label for="mqpBody">Texte du mail</label><textarea class="inp" id="mqpBody" rows="14" maxlength="6000"></textarea></div>
+            <p class="note" style="margin-top:8px"><b>{maquette}</b> seul sur sa ligne : aperçu visuel de la maquette (photo, logo, bouton « Voir votre nouveau site »). <b>{lien}</b> : l'adresse seule. Variables : {bonjour}, {entreprise}, {ville}, {metier|repli}. Le nouveau texte s'applique aux prochains mails préparés ; ceux déjà en attente gardent le leur, modifiable un par un.</p>
+            <div class="run" style="margin-top:12px"><button type="submit" class="b b-main" id="bMqpSave">Enregistrer</button></div>
+          </div>
+        </form>
+      </section>
+
       <!-- ==================== MAQUETTES (refonte, mode test) ==================== -->
       <section class="view" id="v-maq">
         <div class="banner info"><div class="grow"><b>Mode test.</b> L'outil refait le site d'un prospect à partir de ses textes et de ses photos, et le met en ligne sur <b>nom.yontech.fr</b>. L'e-mail de présentation ne part que vers vos propres adresses, jamais vers le prospect.</div></div>
@@ -1018,6 +1086,7 @@ async function api(action, payload){
    ============================================================ */
 const VIEWS = {
   auto:     { t:"Automate",   s:"Recherche d'entreprises et envoi des e-mails de prospection, en continu et sans intervention." },
+  mqp:      { t:"Prospection maquette", s:"Chaque jour, des prospects avec site reçoivent un mail contenant la refonte de leur site. Rien ne part sans votre validation." },
   maq:      { t:"Maquettes",  s:"Refonte automatique du site d'un prospect, en ligne sur nom.yontech.fr. Mode test : mails vers vos adresses uniquement." },
   target:   { t:"Ciblage",    s:"Les entreprises que l'automate va chercher et contacter." },
   tpl:      { t:"Messages",   s:"Les modèles d'e-mail personnalisés par l'automate." },
@@ -1039,12 +1108,147 @@ function showView(v){
   if (v === "tpl"){ renderTemplates(); loadSamples(); }
   if (v === "settings") fillSettings();
   if (v === "auto") loadState().catch(() => {});
+  if (v === "mqp") loadMqp().catch(e => toast(e.message || "Chargement impossible."));
   if (v === "maq") loadMaquettes().catch(e => toast(e.message || "Chargement des maquettes impossible."));
 }
 document.querySelectorAll(".nav-b").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
 document.addEventListener("click", ev => {
   const g = ev.target.closest("[data-go]");
   if (g){ ev.preventDefault(); showView(g.getAttribute("data-go")); }
+});
+
+/* ============================================================
+   PROSPECTION MAQUETTE — 20 mails préparés par jour, envoyés après validation
+   ============================================================ */
+let MQP = null;
+
+async function loadMqp(){
+  MQP = await api("mqp.state");
+  renderMqp();
+}
+function mqpSentLine(r){
+  const m = r.yontech_prospection_messages || {};
+  const tags = [
+    ['Ouvert', !!m.opened_at], ['Maquette vue', (r.views || 0) > 0], ['Clic', !!m.site_clicked_at], ['Réponse', !!m.replied_at]
+  ].map(([l, on]) => '<span class="tagx' + (on ? " on" : "") + '">' + l + '</span>').join("");
+  return '<li><div class="grow"><b>' + esc(r.company) + '</b><span>' + esc(m.email || "") + " · envoyé le " + dateFr(r.sent_at) + " à " + timeFr(r.sent_at) + (r.views ? " · " + r.views + " vue(s)" : "") + '</span></div>' + tags +
+    '<a class="b b-out b-xs" href="' + esc(r.url) + '" target="_blank" rel="noopener">Maquette ↗</a></li>';
+}
+function renderMqp(){
+  if (!MQP) return;
+  $("pillMqp").hidden = !(MQP.pending || []).length; $("pillMqp").textContent = (MQP.pending || []).length;
+  const s = MQP.settings, st = MQP.stats, pend = MQP.pending || [], sent = MQP.sent || [];
+  const banners = [];
+  if (!MQP.domainReady) banners.push('<div class="banner warn"><div class="grow"><b>Adresses nom.yontech.fr pas encore branchées.</b> Les mails partent avec le lien provisoire prospection.yontech.fr/maquette.html, qui fonctionne. Ils basculeront seuls sur nom.yontech.fr après le réglage Cloudflare.</div></div>');
+  if (!s.enabled) banners.push('<div class="banner info"><div class="grow"><b>Préparation automatique coupée.</b> Plus aucun mail n\'est préparé ; activez-la dans les réglages en bas de page.</div></div>');
+  $("mqpBanners").innerHTML = banners.join("");
+  $("mqpKPending").textContent = st.pending;
+  $("mqpKToday").innerHTML = st.preparedToday + ' <small>/ ' + s.daily + '</small>';
+  $("mqpKTodayF").textContent = s.enabled ? "préparation toutes les 10 min" : "préparation coupée";
+  $("mqpKSent").textContent = st.sent;
+  $("mqpKSentF").textContent = st.opened + " ouvert(s) · " + st.clicked + " clic(s)";
+  $("mqpKViewed").textContent = st.viewed;
+  $("mqpKViewedF").textContent = st.sent ? Math.round(st.viewed * 100 / st.sent) + " % des envoyés" : "";
+  $("mqpKReplied").textContent = st.replied;
+  $("mqpCount").textContent = pend.length ? pend.length + " mail(s)" : "";
+  $("bMqpAll").hidden = pend.length < 2;
+  $("mqpEmpty").hidden = pend.length > 0;
+  $("mqpList").innerHTML = pend.map(r => {
+    const m = r.yontech_prospection_messages || {}, d = r.data || {};
+    return '<div class="mqp-item" data-id="' + r.id + '">' +
+      '<a class="mqp-shot" href="' + esc(r.url) + '" target="_blank" rel="noopener" title="Ouvrir la maquette">' + (d.image ? '<img src="' + esc(d.image) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") + '<span style="background:' + esc(d.accent || "#444") + '">' + esc(d.tagline || r.company) + '</span></a>' +
+      '<div class="mqp-main"><div class="who">' + esc(m.company || r.company) + '</div>' +
+        '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + ' · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
+        '<input class="inp" data-f="subject" maxlength="200" value="' + esc(r.mail_subject || s.subject) + '" aria-label="Objet">' +
+        '<details><summary>Modifier le texte du mail</summary><textarea class="inp" data-f="body" rows="12" maxlength="6000" style="margin-top:8px">' + esc(r.mail_body || s.body) + '</textarea></details>' +
+      '</div>' +
+      '<div class="mqp-acts">' +
+        '<button type="button" class="b b-main b-sm" data-mqp="send">Valider et envoyer</button>' +
+        '<button type="button" class="b b-out b-sm" data-mqp="preview">Voir le mail</button>' +
+        '<button type="button" class="b b-out b-sm" data-mqp="fix">Corriger la maquette</button>' +
+        '<button type="button" class="b b-out b-sm" data-mqp="del">Supprimer</button>' +
+      '</div></div>';
+  }).join("");
+  $("mqpSentCount").textContent = sent.length ? sent.length + " envoi(s)" : "";
+  $("mqpSentEmpty").hidden = sent.length > 0;
+  $("mqpSent").innerHTML = sent.map(mqpSentLine).join("");
+  if (document.activeElement !== $("mqpBody") && document.activeElement !== $("mqpSubj")){
+    $("mqpOn").checked = !!s.enabled; $("mqpDaily").value = s.daily; $("mqpSubj").value = s.subject; $("mqpBody").value = s.body;
+  }
+}
+const mqpFields = item => ({ subject: item.querySelector('[data-f="subject"]').value, body: item.querySelector('[data-f="body"]').value });
+
+$("v-mqp").addEventListener("click", async ev => {
+  const btn = ev.target.closest("[data-mqp]");
+  if (!btn) return;
+  const item = btn.closest(".mqp-item"), id = item.dataset.id, kind = btn.dataset.mqp;
+  const row = (MQP.pending || []).find(r => r.id === id) || {};
+  const to = (row.yontech_prospection_messages || {}).email || "";
+  if (kind === "preview"){
+    const open = item.querySelector(".mqp-prev");
+    if (open){ open.remove(); btn.textContent = "Voir le mail"; return; }
+    busy(btn, true);
+    try {
+      const r = await api("mqp.preview", { id, ...mqpFields(item) });
+      const box = document.createElement("div");
+      box.className = "mqp-prev";
+      box.innerHTML = '<div class="h"><b>À :</b> ' + esc(r.to) + ' &nbsp; <b>Objet :</b> ' + esc(r.subject) + '</div><iframe sandbox="allow-popups" title="Aperçu du mail"></iframe>';
+      item.appendChild(box);
+      box.querySelector("iframe").srcdoc = r.html;
+      btn.textContent = "Masquer le mail";
+    } catch(e){ toast(e.message || "Aperçu impossible."); }
+    busy(btn, false);
+    return;
+  }
+  if (kind === "fix"){
+    showView("maq");
+    try { await mqOpenById(id); } catch(e){ toast(e.message || "Ouverture impossible."); }
+    return;
+  }
+  if (kind === "del"){
+    if (!confirm("Supprimer ce mail et sa maquette ?\n\nLe lien de la maquette ne fonctionnera plus. " + (row.company || "Ce prospect") + " repart dans la file de l'automate classique.")) return;
+    busy(btn, true);
+    try { await api("mqp.reject", { id }); toast("Supprimé."); await loadMqp(); } catch(e){ toast(e.message || "Suppression impossible."); busy(btn, false); }
+    return;
+  }
+  if (kind === "send"){
+    if (!confirm("Envoyer maintenant le mail avec la maquette à " + to + " ?")) return;
+    busy(btn, true, "Envoi…");
+    try { const r = await api("mqp.validate", { id, ...mqpFields(item) }); toast("Envoyé à " + r.to + ".", 5000); await loadMqp(); }
+    catch(e){ toast(e.message || "Envoi impossible.", 7000); busy(btn, false); }
+  }
+});
+$("bMqpAll").addEventListener("click", async () => {
+  const items = [...document.querySelectorAll("#mqpList .mqp-item")];
+  if (!items.length) return;
+  if (!confirm("Envoyer les " + items.length + " mails en attente, tels qu'ils sont enregistrés ?\n\nVérifiez d'abord les maquettes : un mail envoyé ne se rattrape pas.")) return;
+  // Les objets et textes modifiés à l'écran sont enregistrés avant l'envoi groupé.
+  busy($("bMqpAll"), true, "Envoi…");
+  try {
+    for (const it of items) await api("mqp.save", { id: it.dataset.id, ...mqpFields(it) });
+    const r = await api("mqp.validate_many", { ids: items.map(it => it.dataset.id) });
+    toast(r.sent + " mail(s) envoyé(s)" + (r.errors.length ? " · " + r.errors.length + " erreur(s) : " + r.errors[0] : "."), 8000);
+  } catch(e){ toast(e.message || "Envoi groupé impossible.", 7000); }
+  busy($("bMqpAll"), false);
+  await loadMqp().catch(() => {});
+});
+$("bMqpPrep").addEventListener("click", async () => {
+  busy($("bMqpPrep"), true, "Préparation…");
+  try {
+    const r = await api("mqp.prepare", { n: 3 });
+    toast(r.prepared ? r.prepared + " maquette(s) préparée(s)." + (r.failed ? " " + r.failed + " site(s) écarté(s)." : "") : (r.errors && r.errors[0]) || "Aucun prospect « avec site » disponible pour l'instant.", 7000);
+    await loadMqp();
+  } catch(e){ toast(e.message || "Préparation impossible."); }
+  busy($("bMqpPrep"), false);
+});
+$("mqpForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  busy($("bMqpSave"), true);
+  try {
+    await api("mqp.settings", { enabled: $("mqpOn").checked, daily: Number($("mqpDaily").value), subject: $("mqpSubj").value, body: $("mqpBody").value });
+    toast("Réglages enregistrés."); await loadMqp();
+  } catch(e){ toast(e.message || "Enregistrement impossible."); }
+  busy($("bMqpSave"), false);
 });
 
 /* ============================================================

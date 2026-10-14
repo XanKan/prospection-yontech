@@ -1,8 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { BRAND, normalizeTarget, targetKey, templateVars, unknownVariables } from "../_shared/yontech-core.ts";
+import { BRAND, composeEmail, normalizeTarget, targetKey, templateVars, unknownVariables } from "../_shared/yontech-core.ts";
 import { deliver, smtpConfigured, smtpHost, smtpPort } from "../_shared/yontech-mail.ts";
 import { knownFor, maybeSource } from "../_shared/yontech-jobs.ts";
-import { buildSite, renderSite, RESERVED_SLUGS, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
+import { buildSite, maquetteMailBlock, renderSite, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
+import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareMaquettes, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
 
 // Point d'entrée unique de l'outil prospection.yontech.fr. Réservé aux
 // comptes Supabase Auth dont l'adresse figure dans le secret
@@ -62,53 +63,10 @@ function parisNow() {
 const SAMPLE = { entreprise: "DUPONT MECANIQUE", prenom: "Jean", nom: "Dupont", ville: "La Roche-sur-Yon", cp: "85000", metier: "fabrication de produits métalliques", departement: "85", effectif: "20 à 49", site: "dupont-mecanique.fr" };
 
 
-/* ---------------- Maquettes de refonte (mode test) ---------------- */
+/* ---------------- Maquettes de refonte ---------------- */
 // deno-lint-ignore no-explicit-any
 type Rec = Record<string, any>;
-const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data";
-let domainCheck: { ready: boolean; at: number } | null = null;
-// Le domaine *.yontech.fr est prêt quand un sous-domaine quelconque répond
-// (enregistrement DNS générique posé avec le Worker Cloudflare).
-async function maquetteDomainReady() {
-  if (domainCheck && Date.now() - domainCheck.at < 10 * 60_000) return domainCheck.ready;
-  let ready = false;
-  try {
-    const r = await fetch("https://cloudflare-dns.com/dns-query?name=verif-maquette.yontech.fr&type=AAAA", { headers: { Accept: "application/dns-json" }, signal: AbortSignal.timeout(3000) });
-    const j = await r.json();
-    ready = Array.isArray(j.Answer) && j.Answer.length > 0;
-  } catch { /* considéré comme non prêt */ }
-  domainCheck = { ready, at: Date.now() };
-  return ready;
-}
-function maquetteUrl(slug: string, ready: boolean) {
-  return ready ? `https://${slug}.yontech.fr` : `https://prospection.yontech.fr/maquette.html?s=${slug}`;
-}
-// deno-lint-ignore no-explicit-any
-async function uniqueSlug(db: any, wanted: string) {
-  for (let i = 0; i < 20; i++) {
-    const slug = i === 0 ? wanted : `${wanted.slice(0, 44)}-${i + 1}`;
-    if (RESERVED_SLUGS.has(slug)) continue;
-    const { data } = await db.from("yontech_maquettes").select("id").eq("slug", slug).maybeSingle();
-    if (!data) return slug;
-  }
-  return `${wanted.slice(0, 40)}-${crypto.randomUUID().slice(0, 6)}`;
-}
-const MAQUETTE_MAIL = {
-  subject: "{entreprise} : nous avons refait votre site, il est déjà en ligne",
-  body: `{bonjour},
-
-Nous nous sommes permis de refaire le site de {entreprise}, à partir de vos textes et de vos photos actuels. Le résultat est en ligne, rien que pour vous :
-
-{lien}
-
-Il s'affiche parfaitement sur téléphone, se charge vite et met en avant votre numéro et votre demande de devis. Comparez avec le site actuel : c'est le même contenu, présenté autrement.
-
-Si cette version vous plaît, elle est à vous : nous la mettons en ligne sur votre propre adresse, avec vos corrections, pour 39 € par mois (hébergement, nom de domaine et mises à jour compris), sans engagement.
-
-Répondez simplement « ok » et nous vous appelons pour l'ajuster avec vous.
-
-Bien cordialement,`,
-};
+const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body";
 
 function adminAllowed(address: string) {
   const list = (Deno.env.get("YONTECH_ADMIN_EMAILS") || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -446,6 +404,125 @@ Deno.serve(async (req) => {
       return response(req, { ok: true, to });
     }
 
+    /* ------------- Prospection par maquette (validation manuelle) ------------- */
+    if (action === "mqp.state") {
+      const ready = await maquetteDomainReady();
+      const [settings, pending, sent] = await Promise.all([
+        db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_subject,maquette_body").eq("id", 1).single(),
+        db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data)").eq("review", "a_valider").order("prepared_at").limit(100),
+        db.from("yontech_maquettes").select("id,slug,company,views,last_view_at,sent_at,review,data,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)").in("review", ["envoye"]).order("sent_at", { ascending: false }).limit(100),
+      ]);
+      for (const r of [settings, pending, sent]) if (r.error) throw r.error;
+      const midnight = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" }));
+      midnight.setHours(0, 0, 0, 0);
+      const s = settings.data as Rec;
+      const slim = (r: Rec) => ({ ...r, url: maquetteUrl(r.slug, ready), data: { accent: r.data?.accent, logo: r.data?.logo, image: r.data?.images?.[0] || "", tagline: r.data?.tagline, theme: r.data?.theme, city: r.data?.city } });
+      const sentRows = (sent.data || []) as Rec[];
+      const preparedToday = ((pending.data || []) as Rec[]).concat(sentRows).filter((r) => r.prepared_at && new Date(r.prepared_at) >= new Date(Date.now() - (Date.now() - midnight.getTime()))).length;
+      return response(req, {
+        domainReady: ready,
+        settings: { enabled: s.maquette_enabled, daily: s.maquette_daily, subject: s.maquette_subject || MAQUETTE_SUBJECT, body: s.maquette_body || MAQUETTE_BODY },
+        pending: ((pending.data || []) as Rec[]).map(slim),
+        sent: sentRows.map(slim),
+        stats: {
+          pending: (pending.data || []).length, sent: sentRows.length, preparedToday,
+          opened: sentRows.filter((r) => r.yontech_prospection_messages?.opened_at).length,
+          clicked: sentRows.filter((r) => r.yontech_prospection_messages?.site_clicked_at).length,
+          viewed: sentRows.filter((r) => (r.views || 0) > 0).length,
+          replied: sentRows.filter((r) => r.yontech_prospection_messages?.replied_at).length,
+        },
+      });
+    }
+    if (action === "mqp.settings") {
+      const patch: Rec = { updated_at: new Date().toISOString() };
+      if ("enabled" in payload) patch.maquette_enabled = payload.enabled === true;
+      if ("daily" in payload) patch.maquette_daily = integer(payload.daily, 0, 100);
+      if ("subject" in payload) patch.maquette_subject = text(payload.subject, 200) || null;
+      if ("body" in payload) {
+        const body = text(payload.body, 6000);
+        if (body && !/\{maquette\}|\{lien\}/.test(body)) throw fail("Le message doit contenir {maquette} (aperçu visuel) ou {lien}.");
+        patch.maquette_body = body || null;
+      }
+      check(await db.from("yontech_prospection_settings").update(patch).eq("id", 1));
+      return response(req, { ok: true });
+    }
+    if (action === "mqp.prepare") {
+      const result = await prepareMaquettes(db, { max: integer(payload.n ?? 3, 1, 5), budgetMs: 90_000, force: true });
+      return response(req, result);
+    }
+    // Prépare l'e-mail d'une maquette en attente (objet et texte éventuellement corrigés).
+    const mqpMail = async (id: string, subject?: unknown, body?: unknown) => {
+      const maq = check(await db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,status,data,unsubscribe_token,tracking_token,siren)").eq("id", id).single()) as Rec;
+      const link = maquetteUrl(maq.slug, await maquetteDomainReady());
+      const msg = maq.yontech_prospection_messages as Rec | null;
+      const template = { id: "maquette", subject: text(subject ?? maq.mail_subject ?? MAQUETTE_SUBJECT, 200), body: text(body ?? maq.mail_body ?? MAQUETTE_BODY, 6000).replaceAll("{lien}", link) };
+      const vars = templateVars({ ...(msg?.data || {}), entreprise: msg?.company || maq.company } as Parameters<typeof templateVars>[0]);
+      return { maq, msg, link, template, vars, block: maquetteMailBlock(maq.data as SiteData, link) };
+    };
+    if (action === "mqp.preview") {
+      const m = await mqpMail(uuid(payload.id), payload.subject, payload.body);
+      const mail = composeEmail({ subject: m.template.subject, body: m.template.body, signature: (check(await db.from("yontech_prospection_settings").select("signature").eq("id", 1).single()) as Rec).signature, unsubscribeUrl: "https://prospection.yontech.fr/desinscription.html", vars: m.vars, block: m.block, source: String(m.msg?.data?.source || "") });
+      return response(req, { subject: mail.subject, html: mail.html, to: m.msg?.email || "" });
+    }
+    const mqpSend = async (id: string, subject?: unknown, body?: unknown) => {
+      const settings = check(await db.from("yontech_prospection_settings").select("*").eq("id", 1).single()) as Rec;
+      const m = await mqpMail(id, subject, body);
+      if (m.maq.review !== "a_valider") throw fail("Ce mail a déjà été traité.");
+      if (!m.msg?.email) throw fail("Prospect introuvable.");
+      if (m.maq.status !== "en_ligne") throw fail("La maquette est retirée : remettez-la en ligne avant d'envoyer.");
+      const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", m.msg.email).maybeSingle();
+      if (banned) {
+        await db.from("yontech_maquettes").update({ review: "rejete" }).eq("id", id);
+        await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", m.msg.id);
+        throw fail("Cette adresse est exclue (désinscription ou rebond) : mail annulé.");
+      }
+      // Mêmes jetons que l'automate : désinscription, suivi des ouvertures et des clics, réponses.
+      const result = await deliver({
+        settings: settings as Parameters<typeof deliver>[0]["settings"], template: m.template, to: m.msg.email, vars: m.vars, source: String(m.msg.data?.source || ""),
+        token: m.msg.unsubscribe_token, trackingToken: m.msg.tracking_token || undefined, block: m.block,
+      });
+      if (!result.ok) {
+        if (result.outcome === "recipient_rejected") {
+          await db.rpc("yontech_prospection_finish", { target_id: m.msg.id, outcome: "recipient_rejected", target_subject: result.subject, target_body: result.body, target_error: result.error });
+          await db.from("yontech_maquettes").update({ review: "rejete" }).eq("id", id);
+        }
+        throw fail(`Envoi refusé : ${result.error}`, 502);
+      }
+      check(await db.rpc("yontech_prospection_finish", { target_id: m.msg.id, outcome: "sent", target_subject: result.subject, target_body: result.body, target_message_id: result.messageId }));
+      await db.from("yontech_prospection_messages").update({ data: { ...(m.msg.data || {}), maquette: m.maq.slug } }).eq("id", m.msg.id);
+      const now = new Date().toISOString();
+      check(await db.from("yontech_maquettes").update({ review: "envoye", sent_at: now, emailed_at: now, email_to: m.msg.email, mail_subject: m.template.subject, mail_body: text(body ?? m.maq.mail_body, 6000) || m.maq.mail_body }).eq("id", id));
+      return { ok: true, to: m.msg.email };
+    };
+    if (action === "mqp.validate") {
+      return response(req, await mqpSend(uuid(payload.id), payload.subject, payload.body));
+    }
+    if (action === "mqp.validate_many") {
+      const ids = uuids(payload.ids).slice(0, 25);
+      const done: string[] = [], errors: string[] = [];
+      for (const id of ids) {
+        try { done.push((await mqpSend(id)).to); } catch (e) { errors.push((e as Error).message); }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      return response(req, { ok: true, sent: done.length, errors });
+    }
+    if (action === "mqp.save") {
+      // Objet et texte corrigés sans envoyer.
+      check(await db.from("yontech_maquettes").update({ mail_subject: text(payload.subject, 200), mail_body: text(payload.body, 6000) }).eq("id", uuid(payload.id)).eq("review", "a_valider"));
+      return response(req, { ok: true });
+    }
+    if (action === "mqp.reject") {
+      // Supprimée : la maquette disparaît, le prospect repart dans la file de l'automate classique.
+      const maq = check(await db.from("yontech_maquettes").select("id,message_id,review").eq("id", uuid(payload.id)).single()) as Rec;
+      if (maq.review !== "a_valider") throw fail("Ce mail a déjà été traité.");
+      if (maq.message_id) {
+        const { data: msg } = await db.from("yontech_prospection_messages").select("data").eq("id", maq.message_id).maybeSingle();
+        await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...((msg?.data as Rec) || {}), maquette_essai: "supprimée" } }).eq("id", maq.message_id).eq("status", "maquette");
+      }
+      check(await db.from("yontech_maquettes").delete().eq("id", maq.id));
+      return response(req, { ok: true });
+    }
+
     /* ------------- Maquettes de refonte (mode test) ------------- */
     if (action === "maquette.list") {
       const [rows, candidates, ready] = await Promise.all([
@@ -524,13 +601,14 @@ Deno.serve(async (req) => {
       const allowed = admins.includes(to) || to === String(settings.sender_email).toLowerCase() || /@yontech\.fr$/.test(to);
       if (!allowed) throw fail("Mode test : l'e-mail ne peut partir que vers vos propres adresses (comptes de l'outil ou adresses @yontech.fr), jamais vers le prospect.", 403);
       const link = maquetteUrl(maq.slug, await maquetteDomainReady());
+      const full = check(await db.from("yontech_maquettes").select("data").eq("id", maq.id).single()) as Rec;
       let prospect: Record<string, unknown> = { entreprise: maq.company, site: maq.host };
       if (maq.message_id) {
         const { data: m } = await db.from("yontech_prospection_messages").select("company,data").eq("id", maq.message_id).maybeSingle();
         if (m) prospect = { ...(m.data || {}), entreprise: maq.company || m.company, site: maq.host };
       }
-      const template = { id: "maquette", subject: MAQUETTE_MAIL.subject, body: MAQUETTE_MAIL.body.replace("{lien}", link) };
-      const result = await deliver({ settings, template, to, vars: templateVars(prospect as Parameters<typeof templateVars>[0]), token: crypto.randomUUID(), subjectPrefix: "[Test] " });
+      const template = { id: "maquette", subject: settings.maquette_subject || MAQUETTE_SUBJECT, body: String(settings.maquette_body || MAQUETTE_BODY).replaceAll("{lien}", link) };
+      const result = await deliver({ settings, template, to, vars: templateVars(prospect as Parameters<typeof templateVars>[0]), token: crypto.randomUUID(), subjectPrefix: "[Test] ", block: maquetteMailBlock(full.data as SiteData, link) });
       if (!result.ok) return response(req, { ok: false, outcome: result.outcome, error: result.error }, 502);
       check(await db.from("yontech_maquettes").update({ emailed_at: new Date().toISOString(), email_to: to }).eq("id", maq.id));
       return response(req, { ok: true, to, link });

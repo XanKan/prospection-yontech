@@ -36,3 +36,7 @@ verify_jwt = false
 
 [functions.yontech-maquette]
 verify_jwt = false
+
+# Préparation quotidienne de la prospection par maquette (pg_cron).
+[functions.yontech-maquettes-batch]
+verify_jwt = false

@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 import { parseHTML } from "npm:linkedom@0.18.5";
-import { extractEmails, htmlEscape, niceCompany } from "./yontech-core.ts";
+import { extractEmails, htmlEscape, niceCompany, type Tracking, trackedUrl } from "./yontech-core.ts";
 
 // Générateur de maquettes de refonte (campagne « sites », prospects qui ont
 // déjà un site). Il lit le site actuel de l'entreprise (accueil, puis une page
@@ -470,7 +470,9 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
   if (found.address && found.city === "" && hints.ville) found.address = found.address;
   const welcome = (t: string) => clean(t, 400).replace(/^bienvenue\s+(chez|sur le site d[eu']|à|au|aux|dans)\s*[^,.!:–—-]{2,60}[,.!:–—-]\s*/i, "");
   const clause = (t: string) => { const first = welcome(t).split(/(?<=[.!?;])\s|\s[–—]\s/)[0].replace(/[.;]$/, "").trim(); return first.length >= 15 && first.length <= 85 ? first[0].toUpperCase() + first.slice(1) : ""; };
-  const tagline = sentenceCase(h1 || (titleRest && titleRest.length <= 80 ? titleRest : "") || clause(c.description) || clause(intro) || name);
+  // « Maçonnerie générale à Charleville | SARL Decq » : la partie qui répète le nom est retirée.
+  const dropName = (t: string) => t.split(/\s+[|–—·-]\s+/).filter((p) => p && !(compact(p).includes(compact(name)) && p.length <= name.length + 12)).join(" – ") || t;
+  const tagline = sentenceCase(dropName(h1 || (titleRest && titleRest.length <= 80 ? titleRest : "") || clause(c.description) || clause(intro) || name));
   // Le libellé SIRENE (« travaux de construction spécialisés ») n'est jamais affiché : trop administratif.
   let activity = titleRest && titleRest.length <= 60 ? titleRest : "";
   if (compact(activity) === compact(tagline)) activity = "";
@@ -848,4 +850,28 @@ var lg=document.querySelector('[data-logo]');function chk(){if(lg&&lg.naturalWid
 </script>
 </body>
 </html>`;
+}
+
+// Aperçu de la maquette dans l'e-mail : barre de navigateur avec l'adresse,
+// photo d'accroche, bandeau à la couleur de l'entreprise avec son logo et un
+// bouton. Tableaux et styles en ligne (Outlook, Gmail, Apple Mail).
+export function maquetteMailBlock(d: SiteData, url: string) {
+  return (tracking?: Tracking) => {
+    const e = htmlEscape;
+    const href = e(trackedUrl(url, tracking));
+    const accent = /^#[0-9a-f]{6}$/i.test(d.accent) ? d.accent : FALLBACK_ACCENT;
+    const ink = inkOf(accent);
+    const host = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const hero = d.images[0] || "";
+    const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin:6px 0 20px;border:1px solid #e3e4ec;border-radius:14px;border-collapse:separate;overflow:hidden">` +
+      `<tr><td style="background:#f1f2f6;padding:9px 14px;border-bottom:1px solid #e3e4ec;font:12px Arial,Helvetica,sans-serif;color:#8a8ca0"><span style="color:#ff5f57">&#9679;</span> <span style="color:#febc2e">&#9679;</span> <span style="color:#28c840">&#9679;</span>&nbsp;&nbsp;<a href="${href}" style="color:#5b5d72;text-decoration:none">${e(host)}</a></td></tr>` +
+      (hero ? `<tr><td style="padding:0;line-height:0"><a href="${href}"><img src="${e(hero)}" width="560" alt="Aperçu du nouveau site de ${e(d.name)}" style="display:block;width:100%;max-width:560px;height:auto;border:0"></a></td></tr>` : "") +
+      `<tr><td style="background:${ink};padding:22px 24px">` +
+      (d.logo ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px"><tr><td style="background:#ffffff;border-radius:8px;padding:6px 10px"><img src="${e(d.logo)}" height="30" alt="${e(d.name)}" style="display:block;height:30px;width:auto;max-width:180px;border:0"></td></tr></table>` : "") +
+      `<div style="font:bold 21px/1.25 Arial,Helvetica,sans-serif;color:#ffffff">${e(d.tagline)}</div>` +
+      `<div style="font:14px/1.5 Arial,Helvetica,sans-serif;color:#e8e9f0;margin-top:6px">${e([d.name, d.city].filter(Boolean).join(" · "))}</div>` +
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px"><tr><td style="background:#ffffff;border-radius:999px"><a href="${href}" style="display:inline-block;padding:12px 22px;font:bold 15px Arial,Helvetica,sans-serif;color:${ink};text-decoration:none">Voir votre nouveau site &rarr;</a></td></tr></table>` +
+      `</td></tr></table>`;
+    return { html, text: `Votre nouveau site : ${url}` };
+  };
 }

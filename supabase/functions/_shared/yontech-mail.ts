@@ -1,5 +1,6 @@
 import nodemailer from "npm:nodemailer@6.10.1";
-import { BRAND, classifySmtpError, composeEmail, htmlEscape, retryDelaySeconds, youtubeThumb, type SmtpOutcome, type Vars } from "./yontech-core.ts";
+import { BRAND, classifySmtpError, composeEmail, type ComposeInput, htmlEscape, retryDelaySeconds, youtubeThumb, type SmtpOutcome, type Vars } from "./yontech-core.ts";
+type ComposeBlock = NonNullable<ComposeInput["block"]>;
 
 // Envoi SMTP depuis la boîte Hostinger de Yontech. Les fonctions Supabase
 // bloquent les ports 25 et 587 : seul le port 465 (TLS implicite) est utilisable.
@@ -76,13 +77,14 @@ export async function resolveVideoThumb(videoUrl: string): Promise<string> {
 export async function deliver(input: {
   settings: SenderSettings; template: MailTemplate; to: string; vars: Vars; token: string;
   trackingToken?: string; subjectPrefix?: string; inReplyTo?: string; source?: string;
+  block?: ComposeBlock;
 }): Promise<DeliveryResult> {
   const links = unsubscribeLinks(input.token);
-  const videoThumb = await resolveVideoThumb(input.settings.video_url || "");
+  const videoThumb = input.block ? "" : await resolveVideoThumb(input.settings.video_url || "");
   const mail = composeEmail({
     subject: input.template.subject, body: input.template.body, signature: input.settings.signature,
     footerIdentity: input.settings.footer_identity, unsubscribeUrl: links.page, vars: input.vars,
-    videoUrl: input.settings.video_url || "", videoThumb, source: input.source,
+    videoUrl: input.block ? "" : input.settings.video_url || "", videoThumb, source: input.source, block: input.block,
     tracking: input.trackingToken ? { base: trackingBase(), token: input.trackingToken } : undefined,
     logoUrl: Deno.env.get("YONTECH_LOGO_URL") ?? BRAND.logo,
   });

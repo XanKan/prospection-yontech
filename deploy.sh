@@ -47,7 +47,7 @@ PY
 }
 
 functions() {
-  for name in yontech-prospection-api yontech-prospection-sender yontech-prospection-sourcer yontech-prospection-track yontech-prospection-unsubscribe yontech-prospection-bounces yontech-maquette; do
+  for name in yontech-prospection-api yontech-prospection-sender yontech-prospection-sourcer yontech-prospection-track yontech-prospection-unsubscribe yontech-prospection-bounces yontech-maquette yontech-maquettes-batch; do
     echo "→ Fonction ${name}"
     $CLI --yes functions deploy "$name" --project-ref "$PROJECT_REF"
   done
