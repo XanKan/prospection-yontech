@@ -80,19 +80,35 @@ export async function knownFor(db: SupabaseClient, sirens: string[], emails: str
 // dès que `autopilot_batch` entreprises ont été ajoutées. Sans `force`, il ne
 // part que si le pilote est actif, l'automate n'est pas en pause, la file est
 // sous deux jours d'envoi et le dernier passage date de plus de 90 secondes.
+function parisDayStart() {
+  const now = new Date();
+  const day = new Intl.DateTimeFormat("fr-CA", { timeZone: "Europe/Paris" }).format(now);
+  const offset = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Paris", timeZoneName: "shortOffset" }).formatToParts(now).find((p) => p.type === "timeZoneName")?.value || "GMT+1";
+  const h = Number((offset.match(/[+-]\d+/) || ["+1"])[0]);
+  return new Date(`${day}T00:00:00${h >= 0 ? "+" : "-"}${String(Math.abs(h)).padStart(2, "0")}:00`).toISOString();
+}
+
 export async function maybeSource(db: SupabaseClient, force = false, budgetMs = 100_000) {
   const { data: s, error } = await db.from("yontech_prospection_settings")
-    .select("paused,autopilot,autopilot_target,autopilot_min_score,autopilot_batch,daily_cap,sourcing_cursor,last_sourcing_at,require_first_name,site_share").eq("id", 1).single();
+    .select("paused,autopilot,autopilot_target,autopilot_min_score,autopilot_batch,daily_cap,sourcing_cursor,last_sourcing_at,require_first_name,site_share,maquette_enabled,maquette_daily").eq("id", 1).single();
   if (error) throw error;
   // Réserve comptée par campagne : la source RGE (sites internet) remplit
   // vite, la découverte web (logiciel) lentement. Chaque campagne a sa part
   // de deux jours d'envoi ; une campagne pleine ne bloque pas l'autre.
   const share = Math.max(0, Math.min(100, Number(s.site_share ?? 33)));
-  const [{ count: siteQueued }, { count: logicielQueued }] = await Promise.all([
+  const [{ count: siteQueued }, { count: logicielQueued }, { count: maquetteReady }, { count: maquetteToday }] = await Promise.all([
     db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "queued").eq("data->>campagne", "site"),
     db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "queued").or("data->>campagne.is.null,data->>campagne.neq.site"),
+    // Prospects utilisables pour la prospection par maquette : avec un site, jamais essayés.
+    db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).eq("status", "queued").eq("data->>campagne", "site")
+      .not("data->>site", "is", null).neq("data->>site", "").or("data->>sanssite.is.null,data->>sanssite.neq.true").is("data->>maquette_essai", null),
+    db.from("yontech_maquettes").select("id", { count: "exact", head: true }).not("review", "is", null).gte("prepared_at", parisDayStart()),
   ]);
-  const siteFull = (siteQueued || 0) >= Math.max(Math.round(s.daily_cap * 2 * share / 100), s.autopilot_batch);
+  // La file « site » n'est pleine que si elle contient aussi de quoi préparer
+  // les maquettes du jour : des prospects sans site ne servent pas aux maquettes.
+  // Seulement tant que les maquettes du jour ne sont pas toutes préparées.
+  const maquetteShort = s.maquette_enabled === true && (maquetteToday || 0) < Number(s.maquette_daily || 0) && (maquetteReady || 0) < Number(s.maquette_daily || 0);
+  const siteFull = !maquetteShort && (siteQueued || 0) >= Math.max(Math.round(s.daily_cap * 2 * share / 100), s.autopilot_batch);
   const logicielFull = (logicielQueued || 0) >= Math.max(Math.round(s.daily_cap * 2 * (100 - share) / 100), s.autopilot_batch);
   if (!force) {
     if (s.paused || !s.autopilot) return { state: "off" };

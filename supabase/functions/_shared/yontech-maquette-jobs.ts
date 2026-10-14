@@ -117,6 +117,20 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
       const has = new Set((taken || []).map((x) => x.message_id));
       cand = list.find((c) => !has.has(c.id));
     }
+    // 3. À défaut : ceux qui ont reçu le mail classique il y a plus de 24 h sans
+    //    l'ouvrir ni répondre (la maquette remplace leur relance), meilleur score d'abord.
+    //    Rien ne part sans validation dans l'onglet Prospection maquette.
+    if (!cand) {
+      const { data: quiet } = await db.from("yontech_prospection_messages").select("id,email,company,data,status,opened_at")
+        .eq("status", "sent").eq("data->>campagne", "site").is("data->>maquette_essai", null)
+        .is("opened_at", null).is("replied_at", null)
+        .lt("sent_at", new Date(Date.now() - 24 * 3_600_000).toISOString())
+        .order("score", { ascending: false, nullsFirst: false }).order("sent_at", { ascending: false }).limit(20);
+      const list = (quiet || []).filter((c) => c.data?.site && String(c.data?.sanssite) !== "true");
+      const { data: taken } = list.length ? await db.from("yontech_maquettes").select("message_id").in("message_id", list.map((c) => c.id)) : { data: [] };
+      const has = new Set((taken || []).map((x) => x.message_id));
+      cand = list.find((c) => !has.has(c.id));
+    }
     if (!cand) break;
     const fromQueue = cand.status === "queued";
     // Prospect de la file : réservé (statut « maquette »). Prospect déjà contacté : statut inchangé.
