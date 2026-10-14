@@ -64,9 +64,16 @@ const SAMPLE = { entreprise: "DUPONT MECANIQUE", prenom: "Jean", nom: "Dupont", 
 
 
 /* ---------------- Maquettes de refonte ---------------- */
+// Modèle du mail « maquette » : un des modèles actifs de ce type, au hasard.
+// deno-lint-ignore no-explicit-any
+async function maquetteTemplate(db: any) {
+  const { data } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("kind", "maquette").eq("active", true);
+  const list = (data || []) as { id: string; subject: string; body: string }[];
+  return list.length ? list[Math.floor(Math.random() * list.length)] : { id: null, subject: MAQUETTE_SUBJECT, body: MAQUETTE_BODY };
+}
 // deno-lint-ignore no-explicit-any
 type Rec = Record<string, any>;
-const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body";
+const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id";
 
 function adminAllowed(address: string) {
   const list = (Deno.env.get("YONTECH_ADMIN_EMAILS") || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -239,15 +246,17 @@ Deno.serve(async (req) => {
     }
 
     if (action === "templates.save") {
-      const kind = ["initial", "relance1", "relance2"].includes(String(payload.kind)) ? String(payload.kind) : "initial";
-      const subject = kind === "initial" ? text(payload.subject, 200) : (text(payload.subject, 200) || "Re : (objet du premier message)");
+      const kind = ["initial", "relance1", "relance2", "maquette"].includes(String(payload.kind)) ? String(payload.kind) : "initial";
+      const subject = kind === "initial" || kind === "maquette" ? text(payload.subject, 200) : (text(payload.subject, 200) || "Re : (objet du premier message)");
       // Public : toutes les entreprises, sans site internet (annuaire RGE) ou avec site.
       const audience = ["tous", "sanssite", "avecsite"].includes(String(payload.audience)) ? String(payload.audience) : "tous";
       // Campagne : « logiciel » (développement, applications) ou « site » (création et refonte de sites internet).
       const campagne = ["logiciel", "site"].includes(String(payload.campagne)) ? String(payload.campagne) : "logiciel";
       const row = { name: text(payload.name, 120), subject, body: text(payload.body, 8000), active: payload.active !== false, kind, audience, campagne, updated_at: new Date().toISOString() };
       if (!row.name || !row.subject || !row.body) throw fail("Nom, objet et message sont obligatoires.");
-      const unknown = unknownVariables(row.subject + "\n" + row.body);
+      // Mail de prospection par maquette : {maquette} (aperçu visuel) et {lien} (adresse) en plus.
+      const unknown = unknownVariables(row.subject + "\n" + row.body).filter((v) => !(kind === "maquette" && ["maquette", "lien"].includes(v.toLowerCase())));
+      if (kind === "maquette" && !/\{maquette\}|\{lien\}/i.test(row.body)) throw fail("Ce mail doit contenir {maquette} (aperçu de la maquette) ou {lien} (son adresse).");
       if (unknown.length) throw fail(`Variable inconnue : {${unknown.join("}, {")}}.`);
       const template = payload.id
         ? check(await db.from("yontech_prospection_templates").update(row).eq("id", uuid(payload.id)).select("*").single())
@@ -421,7 +430,7 @@ Deno.serve(async (req) => {
       const preparedToday = ((pending.data || []) as Rec[]).concat(sentRows).filter((r) => r.prepared_at && new Date(r.prepared_at) >= new Date(Date.now() - (Date.now() - midnight.getTime()))).length;
       return response(req, {
         domainReady: ready,
-        settings: { enabled: s.maquette_enabled, daily: s.maquette_daily, subject: s.maquette_subject || MAQUETTE_SUBJECT, body: s.maquette_body || MAQUETTE_BODY },
+        settings: { enabled: s.maquette_enabled, daily: s.maquette_daily, ...(await (async () => { const t = await maquetteTemplate(db); return { subject: t.subject, body: t.body, templates: ((await db.from("yontech_prospection_templates").select("id,name,active").eq("kind", "maquette")).data || []) }; })()) },
         pending: ((pending.data || []) as Rec[]).map(slim),
         sent: sentRows.map(slim),
         stats: {
@@ -488,7 +497,7 @@ Deno.serve(async (req) => {
         }
         throw fail(`Envoi refusé : ${result.error}`, 502);
       }
-      check(await db.rpc("yontech_prospection_finish", { target_id: m.msg.id, outcome: "sent", target_subject: result.subject, target_body: result.body, target_message_id: result.messageId }));
+      check(await db.rpc("yontech_prospection_finish", { target_id: m.msg.id, outcome: "sent", target_template_id: m.maq.template_id || null, target_subject: result.subject, target_body: result.body, target_message_id: result.messageId }));
       await db.from("yontech_prospection_messages").update({ data: { ...(m.msg.data || {}), maquette: m.maq.slug } }).eq("id", m.msg.id);
       const now = new Date().toISOString();
       check(await db.from("yontech_maquettes").update({ review: "envoye", sent_at: now, emailed_at: now, email_to: m.msg.email, mail_subject: m.template.subject, mail_body: text(body ?? m.maq.mail_body, 6000) || m.maq.mail_body }).eq("id", id));
@@ -594,7 +603,10 @@ Deno.serve(async (req) => {
       // MODE TEST : l'e-mail ne part que vers les adresses de l'équipe, jamais vers le prospect.
       const settings = check(await db.from("yontech_prospection_settings").select("*").eq("id", 1).single());
       if (!settings.sender_email) throw fail("Renseignez d'abord l'adresse d'envoi.");
-      const maq = check(await db.from("yontech_maquettes").select("id,slug,company,host,message_id,status").eq("id", uuid(payload.id)).single()) as Rec;
+      // Sans maquette désignée (test depuis l'écran Messages) : la dernière maquette en ligne.
+      const maq = (payload.id
+        ? check(await db.from("yontech_maquettes").select("id,slug,company,host,message_id,status").eq("id", uuid(payload.id)).single())
+        : check(await db.from("yontech_maquettes").select("id,slug,company,host,message_id,status").eq("status", "en_ligne").order("updated_at", { ascending: false }).limit(1).single())) as Rec;
       if (maq.status !== "en_ligne") throw fail("Remettez d'abord la maquette en ligne.");
       const to = String(email(payload.to || user.email)).toLowerCase();
       const admins = (Deno.env.get("YONTECH_ADMIN_EMAILS") || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -607,11 +619,14 @@ Deno.serve(async (req) => {
         const { data: m } = await db.from("yontech_prospection_messages").select("company,data").eq("id", maq.message_id).maybeSingle();
         if (m) prospect = { ...(m.data || {}), entreprise: maq.company || m.company, site: maq.host };
       }
-      const template = { id: "maquette", subject: settings.maquette_subject || MAQUETTE_SUBJECT, body: String(settings.maquette_body || MAQUETTE_BODY).replaceAll("{lien}", link) };
+      const chosen = payload.template && typeof payload.template === "object"
+        ? { subject: text((payload.template as Rec).subject, 200), body: text((payload.template as Rec).body, 8000) }
+        : await maquetteTemplate(db);
+      const template = { id: "maquette", subject: chosen.subject, body: String(chosen.body).replaceAll("{lien}", link) };
       const result = await deliver({ settings, template, to, vars: templateVars(prospect as Parameters<typeof templateVars>[0]), token: crypto.randomUUID(), subjectPrefix: "[Test] ", block: maquetteMailBlock(full.data as SiteData, link) });
       if (!result.ok) return response(req, { ok: false, outcome: result.outcome, error: result.error }, 502);
       check(await db.from("yontech_maquettes").update({ emailed_at: new Date().toISOString(), email_to: to }).eq("id", maq.id));
-      return response(req, { ok: true, to, link });
+      return response(req, { ok: true, to, link, company: maq.company });
     }
 
     if (action === "autopilot.run") {

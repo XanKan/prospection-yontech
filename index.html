@@ -623,9 +623,8 @@
             <div class="fields">
               <div class="fld" style="max-width:190px"><label for="mqpDaily">Maquettes préparées par jour</label><input class="inp num" type="number" id="mqpDaily" min="0" max="100"></div>
             </div>
-            <div class="fld" style="margin-top:12px"><label for="mqpSubj">Objet du mail</label><input class="inp" id="mqpSubj" maxlength="200"></div>
-            <div class="fld" style="margin-top:12px"><label for="mqpBody">Texte du mail</label><textarea class="inp" id="mqpBody" rows="14" maxlength="6000"></textarea></div>
-            <p class="note" style="margin-top:8px"><b>{maquette}</b> seul sur sa ligne : aperçu visuel de la maquette (photo, logo, bouton « Voir votre nouveau site »). <b>{lien}</b> : l'adresse seule. Variables : {bonjour}, {entreprise}, {ville}, {metier|repli}. Le nouveau texte s'applique aux prochains mails préparés ; ceux déjà en attente gardent le leur, modifiable un par un.</p>
+            <p class="note" style="margin-top:12px" id="mqpTplNote"></p>
+            <p style="margin-top:8px"><a href="#" class="b b-out b-sm" data-go="tpl">Modifier le mail dans Messages</a></p>
             <div class="run" style="margin-top:12px"><button type="submit" class="b b-main" id="bMqpSave">Enregistrer</button></div>
           </div>
         </form>
@@ -711,8 +710,8 @@
               <div class="card-b">
                 <div class="fields tpl-fields">
                   <div class="fld"><label for="tName">Nom interne</label><input class="inp" id="tName" maxlength="120" placeholder="ex. Application sur-mesure — industrie"></div>
-                  <div class="fld"><label for="tKind">Type</label><select class="inp" id="tKind"><option value="initial">Premier contact</option><option value="relance1">Relance 1</option><option value="relance2">Relance 2 (dernière)</option></select>
-                    <p class="help">Une relance part dans le fil du premier message, en « Re : », aux destinataires qui n'ont pas répondu. Délais et conditions dans Réglages.</p></div>
+                  <div class="fld"><label for="tKind">Type</label><select class="inp" id="tKind"><option value="initial">Premier contact</option><option value="relance1">Relance 1</option><option value="relance2">Relance 2 (dernière)</option><option value="maquette">Prospection maquette</option></select>
+                    <p class="help">Une relance part dans le fil du premier message, en « Re : », aux destinataires qui n'ont pas répondu. Délais et conditions dans Réglages. « Prospection maquette » : mail qui présente la maquette du site refait, envoyé depuis l'onglet du même nom après votre validation ; placez {maquette} seul sur sa ligne.</p></div>
                   <div class="fld"><label for="tCampagne">Campagne</label><select class="inp" id="tCampagne"><option value="logiciel">Logiciel et applications</option><option value="site">Sites internet</option></select>
                     <p class="help">Chaque prospect appartient à une campagne : « Sites internet » pour les entreprises sans site ou au site dépassé, « Logiciel » pour les autres. Un prospect ne reçoit que les modèles de sa campagne.</p></div>
                   <div class="fld"><label for="tAudience">Public</label><select class="inp" id="tAudience"><option value="tous">Toutes les entreprises</option><option value="sanssite">Sans site internet (annuaire RGE)</option><option value="avecsite">Avec site internet</option></select>
@@ -1172,8 +1171,10 @@ function renderMqp(){
   $("mqpSentCount").textContent = sent.length ? sent.length + " envoi(s)" : "";
   $("mqpSentEmpty").hidden = sent.length > 0;
   $("mqpSent").innerHTML = sent.map(mqpSentLine).join("");
-  if (document.activeElement !== $("mqpBody") && document.activeElement !== $("mqpSubj")){
-    $("mqpOn").checked = !!s.enabled; $("mqpDaily").value = s.daily; $("mqpSubj").value = s.subject; $("mqpBody").value = s.body;
+  const tpls = s.templates || [];
+  $("mqpTplNote").innerHTML = tpls.length ? "Texte du mail : modèle(s) de type « Prospection maquette » de l'écran Messages — " + tpls.map(t => "<b>" + esc(t.name) + "</b>" + (t.active ? "" : " (inactif)")).join(", ") + ". Plusieurs modèles actifs sont tirés au hasard. Un nouveau texte s'applique aux prochains mails préparés ; ceux en attente restent modifiables un par un ci-dessus." : "Aucun modèle « Prospection maquette » : le texte par défaut est utilisé. Créez-en un dans Messages pour le personnaliser.";
+  if (document.activeElement !== $("mqpDaily")){
+    $("mqpOn").checked = !!s.enabled; $("mqpDaily").value = s.daily;
   }
 }
 const mqpFields = item => ({ subject: item.querySelector('[data-f="subject"]').value, body: item.querySelector('[data-f="body"]').value });
@@ -1245,7 +1246,7 @@ $("mqpForm").addEventListener("submit", async ev => {
   ev.preventDefault();
   busy($("bMqpSave"), true);
   try {
-    await api("mqp.settings", { enabled: $("mqpOn").checked, daily: Number($("mqpDaily").value), subject: $("mqpSubj").value, body: $("mqpBody").value });
+    await api("mqp.settings", { enabled: $("mqpOn").checked, daily: Number($("mqpDaily").value) });
     toast("Réglages enregistrés."); await loadMqp();
   } catch(e){ toast(e.message || "Enregistrement impossible."); }
   busy($("bMqpSave"), false);
@@ -1406,9 +1407,11 @@ function buildEmail(tpl, s, data){
   s = s || {};
   const v = templateVars(data);
   const tidy = x => renderTpl(x, v).replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
-  const parts = String(tpl.body || "").replace(/\r\n/g, "\n").split(/^[ \t]*\{video\}[ \t]*$/m);
+  const isMaq = /^[ \t]*\{maquette\}[ \t]*$/m.test(String(tpl.body || ""));
+  const raw = String(tpl.body || "").replace(/\r\n/g, "\n").replace(/\{lien\}/g, "https://dupont-mecanique.yontech.fr");
+  const parts = raw.split(isMaq ? /^[ \t]*\{maquette\}[ \t]*$/m : /^[ \t]*\{video\}[ \t]*$/m);
   const before = tidy(parts[0] || ""), after = tidy(parts.slice(1).join("\n"));
-  const url = s.video_url || "", id = youtubeId(url);
+  const url = isMaq ? "" : s.video_url || "", id = youtubeId(url);
   const thumb = id ? "https://i.ytimg.com/vi/" + id + "/maxresdefault.jpg" : "";
   const video = url ? (thumb ? '<p style="margin:4px 0 6px"><a href="' + hesc(url) + '" style="text-decoration:none"><img src="' + hesc(thumb) + '" width="480" alt="Vidéo : Yontech en 1 minute" style="display:block;width:100%;max-width:480px;height:auto;border:0;border-radius:12px"></a></p>' : "") +
     '<p style="margin:0 0 16px;font-size:14px"><a href="' + hesc(url) + '" style="color:' + ACCENT + ';font-weight:bold">▶ Yontech en 1 minute</a></p>' : "";
@@ -1418,7 +1421,9 @@ function buildEmail(tpl, s, data){
     '<td style="vertical-align:middle;font:14px/1.5 Arial,Helvetica,sans-serif;color:#5b5d72;border-left:3px solid ' + ACCENT + ';padding:2px 0 2px 14px">' +
     lines.map((l, i) => i === 0 ? '<b style="color:#15161f;font-size:15px">' + hesc(l) + "</b>" : linkify(hesc(l))).join("<br>") + "</td></tr></table>" : "";
   const company = v.entreprise || "votre entreprise", identity = clean(s.footer_identity, 300);
-  const html = '<div style="font:15px/1.6 Arial,Helvetica,sans-serif;color:#1f2030;max-width:640px">' + textToHtml(before) + video + (after ? textToHtml(after) : "") + sig +
+  // Emplacement de l'aperçu de maquette (le vrai, avec la photo et le logo du prospect, est ajouté à l'envoi).
+  const maqBlock = isMaq ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:6px 0 20px;border:1px solid #e3e4ec;border-radius:14px;border-collapse:separate;overflow:hidden"><tr><td style="background:#f1f2f6;padding:9px 14px;font:12px Arial;color:#8a8ca0"><span style="color:#ff5f57">●</span> <span style="color:#febc2e">●</span> <span style="color:#28c840">●</span>&nbsp; nom-entreprise.yontech.fr</td></tr><tr><td style="height:150px;background:linear-gradient(135deg,#cfd3dc,#e9ebf0);text-align:center;font:13px Arial;color:#6b6f7b">Photo du site du prospect</td></tr><tr><td style="background:#1e5aa8;padding:20px 22px"><div style="font:bold 19px Arial;color:#fff">Titre repris de son site</div><div style="font:13px Arial;color:#e8e9f0;margin-top:5px">Nom de l\'entreprise · Ville</div><div style="margin-top:14px"><span style="display:inline-block;background:#fff;color:#1e5aa8;font:bold 14px Arial;padding:10px 18px;border-radius:99px">Voir votre nouveau site →</span></div></td></tr></table>' : "";
+  const html = '<div style="font:15px/1.6 Arial,Helvetica,sans-serif;color:#1f2030;max-width:640px">' + textToHtml(before) + (isMaq ? maqBlock : video) + (after ? textToHtml(after) : "") + sig +
     '<p style="margin:28px 0 0;padding-top:12px;border-top:1px solid #e5e5ef;font-size:12px;line-height:1.5;color:#8a8ca0">Vous recevez ce message car ' + hesc(company) +
     ((data || {}).source === "rge"
       ? " figure dans l'annuaire public des entreprises qualifiées RGE (ADEME, Licence Ouverte) et dans le répertoire des entreprises (base SIRENE de l'INSEE). "
@@ -1863,7 +1868,9 @@ document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeModal
 let tplId = null, lastField = "tBody";
 const SAMPLE = { entreprise: "DUPONT MECANIQUE", prenom: "Jean", nom: "Dupont", ville: "La Roche-sur-Yon", cp: "85000", metier: "fabrication de produits métalliques", departement: "85", effectif: "20 à 49", site: "dupont-mecanique.fr", constat: "ne s'affiche pas correctement sur téléphone", campagne: "site" };
 
-$("varChips").innerHTML = VARS.map(v => '<button type="button" data-var="' + v + '" title="' + esc(VAR_HELP[v]) + '">{' + v + "}</button>").join("");
+VAR_HELP.maquette = "mail « Prospection maquette » : aperçu visuel de la maquette (photo, logo, bouton), seul sur sa ligne";
+VAR_HELP.lien = "mail « Prospection maquette » : adresse de la maquette (nom.yontech.fr)";
+$("varChips").innerHTML = VARS.concat(["maquette", "lien"]).map(v => '<button type="button" data-var="' + v + '" title="' + esc(VAR_HELP[v]) + '">{' + v + "}</button>").join("");
 ["tSubject", "tBody"].forEach(id => $(id).addEventListener("focus", () => { lastField = id; }));
 $("varChips").addEventListener("click", ev => {
   const b = ev.target.closest("[data-var]");
@@ -1882,7 +1889,7 @@ function renderTemplates(){
   if (tplId && !list.some(t => t.id === tplId)) tplId = null;
   if (tplId === null && list.length && !$("tName").dataset.dirty) tplId = list[0].id;
   $("tplList").innerHTML = list.map(t =>
-    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + (AUDIENCE[t.audience] ? ' <code class="k">' + AUDIENCE[t.audience] + "</code>" : "") + (t.campagne === "site" ? ' <code class="k" style="background:var(--blue-soft);color:var(--blue)">sites</code>' : "") + "</b><span>" + esc(KIND[t.kind] ? "Re : objet du premier message" : t.subject) + "</span></button>"
+    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + (AUDIENCE[t.audience] ? ' <code class="k">' + AUDIENCE[t.audience] + "</code>" : "") + (t.campagne === "site" ? ' <code class="k" style="background:var(--blue-soft);color:var(--blue)">sites</code>' : "") + "</b><span>" + esc(t.kind === "relance1" || t.kind === "relance2" ? "Re : objet du premier message" : t.subject) + "</span></button>"
   ).join("") || '<p class="note" style="margin-bottom:10px">Aucun modèle pour l\'instant.</p>';
   // Une modification en cours n'est jamais écrasée par un rafraîchissement.
   if (!$("tName").dataset.dirty) fillTemplate(list.find(x => x.id === tplId) || { name: "", subject: "", body: "", active: true });
@@ -1903,12 +1910,12 @@ async function loadSamples(){
     renderSampleOptions();
   } catch(e){}
 }
-const KIND = { relance1: "relance 1", relance2: "relance 2" };
+const KIND = { relance1: "relance 1", relance2: "relance 2", maquette: "maquette" };
 const AUDIENCE = { sanssite: "sans site", avecsite: "avec site" };
 const CAMPAGNE = { logiciel: "Logiciel", site: "Sites internet" };
 // Une relance part toujours en « Re : » sur l'objet du premier message : son objet propre ne sert pas.
 function syncKind(){
-  const relance = $("tKind").value !== "initial";
+  const relance = $("tKind").value === "relance1" || $("tKind").value === "relance2";
   $("tSubject").disabled = relance;
   if (relance) $("tSubject").value = "Re : (objet du premier message)";
 }
@@ -1977,8 +1984,14 @@ $("bTplTest").addEventListener("click", async ev => {
   busy(btn, true, "Envoi du test…");
   $("tplMsg").textContent = "";
   try {
-    const { to } = await api("test.send", { template: { subject: $("tSubject").value, body: $("tBody").value }, sample: sampleData(), to: $("tTestTo").value.trim() || undefined, realistic: $("tTestReal").checked });
-    $("tplMsg").textContent = "Test envoyé à " + to + ". Vérifiez aussi le dossier indésirables.";
+    if ($("tKind").value === "maquette"){
+      // Test sur la dernière maquette en ligne, avec son vrai aperçu.
+      const r = await api("maquette.send", { template: { subject: $("tSubject").value, body: $("tBody").value }, to: $("tTestTo").value.trim() || undefined });
+      $("tplMsg").textContent = "Test envoyé à " + r.to + " avec la maquette « " + r.company + " ». Vérifiez aussi le dossier indésirables.";
+    } else {
+      const { to } = await api("test.send", { template: { subject: $("tSubject").value, body: $("tBody").value }, sample: sampleData(), to: $("tTestTo").value.trim() || undefined, realistic: $("tTestReal").checked });
+      $("tplMsg").textContent = "Test envoyé à " + to + ". Vérifiez aussi le dossier indésirables.";
+    }
   } catch(e){
     const detail = e.data && e.data.outcome === "fatal" ? " La boîte Hostinger refuse la connexion : vérifiez l'adresse d'envoi et le secret YONTECH_SMTP_PASSWORD côté serveur." : "";
     $("tplMsg").textContent = "Échec : " + e.message + detail;

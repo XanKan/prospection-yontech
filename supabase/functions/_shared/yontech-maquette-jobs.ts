@@ -101,10 +101,13 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
       continue;
     }
     const slug = await uniqueSlug(db, slugify(built.data.name));
+    // Mail : un des modèles actifs de type « maquette » (écran Messages), au hasard.
+    const { data: tpls } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("kind", "maquette").eq("active", true);
+    const tpl = (tpls || []).length ? tpls![Math.floor(Math.random() * tpls!.length)] : null;
     const { error } = await db.from("yontech_maquettes").insert({
       slug, message_id: cand.id, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: built.html,
       status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(),
-      mail_subject: settings.maquette_subject || MAQUETTE_SUBJECT, mail_body: settings.maquette_body || MAQUETTE_BODY,
+      template_id: tpl?.id || null, mail_subject: tpl?.subject || settings.maquette_subject || MAQUETTE_SUBJECT, mail_body: tpl?.body || settings.maquette_body || MAQUETTE_BODY,
     });
     if (error) {
       failed++; errors.push(`${cand.company} : ${error.message}`);
