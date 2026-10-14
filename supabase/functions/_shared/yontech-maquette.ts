@@ -126,7 +126,8 @@ function frenchPhone(raw: string) {
 }
 
 function sentence(text: string, max = 220) {
-  const t = clean(text, 2000);
+  // Puces et tirets collés des listes mises à plat : « terrasse:-Étanchéité•Toitures » → « terrasse : Étanchéité, Toitures ».
+  const t = clean(String(text ?? "").replace(/\s*:\s*-\s*/g, " : ").replace(/\s*[•▪►✓✔·]\s*/g, ", ").replace(/(^|[.:!?]\s*),\s*/g, "$1").replace(/,\s*,/g, ","), 2000);
   if (t.length <= max) return t;
   const cut = t.slice(0, max);
   const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf(" ! "), cut.lastIndexOf(" ? "));
@@ -457,7 +458,9 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
   // Logo et photos (photos vérifiées : vraies images, assez lourdes).
   const ldLogo = (c.org as Record<string, unknown>).logo;
   const logoLd = absolute(typeof ldLogo === "string" ? ldLogo : (ldLogo as Record<string, unknown> | undefined)?.url as string, home.url);
-  const logo = logoLd || c.images.find((i) => i.logo && i.header)?.url || c.images.find((i) => i.logo)?.url || "";
+  // Pas de favicon ni d'icône d'application : trop petits, souvent blancs.
+  const LOGO_SKIP = /favicon|apple-touch|site-icon|\/icon[-_.]|[-_]icon\.|cropped-[^/]*-(32|150|180|192|270|512)x/i;
+  const logo = [logoLd, c.images.find((i) => i.logo && i.header)?.url, c.images.find((i) => i.logo)?.url].find((u) => u && !LOGO_SKIP.test(u)) || "";
   const IMG_SKIP = /logo|icon|favicon|sprite|pixel|avatar|gravatar|emoji|flag|drapeau|badge|payment|paiement|visa|mastercard|loader|spinner|placeholder|blank|arrow|fleche|picto|qualibat|label|certif|partenaire|\.svg|\.gif|google|facebook|instagram|linkedin|youtube|tripadvisor|pagesjaunes/i;
   const candidates = [...c.images, ...extraCollected.flatMap((x) => x.images)]
     .filter((i) => !i.logo && !IMG_SKIP.test(i.url) && i.url !== logo && (!i.w || i.w >= 300))
@@ -589,7 +592,7 @@ footer{background:#0e1015;color:#8d91a0;font-size:14px;padding:34px 0}
 <body>
 <div class="yt-bar">Proposition de nouveau site pour <b>${e(d.name)}</b>, réalisée par Yontech à partir du site actuel. Ce n'est pas le site officiel.<a href="${e(d.source)}" target="_blank" rel="noopener nofollow">Voir le site actuel</a></div>
 <header class="hd"><div class="wrap hd-in">
-<a class="brand" href="#top">${d.logo ? `<img src="${e(d.logo)}" alt="${e(d.name)}">` : `<span class="mono">${e(initials)}</span><span>${e(d.name)}</span>`}</a>
+<a class="brand" href="#top">${d.logo ? `<img src="${e(d.logo)}" alt="${e(d.name)}" data-logo><span class="mono" hidden>${e(initials)}</span><span hidden>${e(d.name)}</span>` : `<span class="mono">${e(initials)}</span><span>${e(d.name)}</span>`}</a>
 <nav>${nav.map(([h, l]) => `<a href="${h}">${l}</a>`).join("")}</nav>
 ${tel ? `<a class="btn btn-sm" href="${e(tel)}">Appeler</a>` : `<a class="btn btn-sm" href="#contact">Nous écrire</a>`}
 </div></header>
@@ -648,7 +651,8 @@ ${tel ? `<a class="fab" href="${e(tel)}">☎ Appeler</a>` : ""}
 (function(){var els=document.querySelectorAll('.rv');if(!('IntersectionObserver' in window)){els.forEach(function(x){x.classList.add('in')});return}
 var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}})},{threshold:.12});
 els.forEach(function(x){io.observe(x)});
-document.querySelectorAll('img').forEach(function(i){i.addEventListener('error',function(){var p=i.closest('.gal a');if(p)p.remove();else i.style.display='none'})});})();
+document.querySelectorAll('img').forEach(function(i){i.addEventListener('error',function(){var p=i.closest('.gal a');if(p)p.remove();else i.style.display='none';if(i.hasAttribute('data-logo')){[].forEach.call(i.parentNode.querySelectorAll('[hidden]'),function(x){x.hidden=false})}})});
+var lg=document.querySelector('[data-logo]');function chk(){if(lg&&lg.naturalWidth&&lg.naturalWidth<40){lg.dispatchEvent(new Event('error'))}}if(lg){if(lg.complete)chk();else lg.addEventListener('load',chk)}})();
 </script>
 </body>
 </html>`;
