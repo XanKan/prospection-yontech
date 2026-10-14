@@ -596,6 +596,7 @@
                 <div class="fields">
                   <div class="fld"><label for="mqName">Nom affiché</label><input class="inp" id="mqName" maxlength="160"></div>
                   <div class="fld" style="max-width:120px"><label for="mqAccent">Couleur</label><input class="inp" type="color" id="mqAccent" style="height:40px;padding:3px"></div>
+                  <div class="fld" style="max-width:220px"><label for="mqTheme">Style</label><select class="inp" id="mqTheme"><option value="atelier">Atelier (artisanat, chaleureux)</option><option value="chantier">Chantier (BTP, énergique)</option><option value="moderne">Moderne (sobre)</option></select></div>
                 </div>
                 <div class="fld"><label for="mqTag">Titre principal</label><input class="inp" id="mqTag" maxlength="160"></div>
                 <div class="fld"><label for="mqEye">Petit titre (activité · ville)</label><input class="inp" id="mqEye" maxlength="160"></div>
@@ -1090,6 +1091,7 @@ function mqShow(m){
   $("mqAbout").value = (d.about || []).join("\n\n");
   $("mqPhone").value = d.phone || ""; $("mqMail").value = d.email || ""; $("mqAddr").value = d.address || "";
   $("mqAccent").value = /^#[0-9a-f]{6}$/i.test(d.accent || "") ? d.accent : "#1e5aa8";
+  $("mqTheme").value = d.theme || "moderne";
   if (!$("mqTo").value && MQ && MQ.adminEmail) $("mqTo").value = MQ.adminEmail;
   $("mqPrev").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1123,7 +1125,7 @@ $("mqEdit").addEventListener("submit", async ev => {
   try {
     const { maquette } = await api("maquette.update", { id: mqCurrent.id, patch: {
       name: $("mqName").value, tagline: $("mqTag").value, eyebrow: $("mqEye").value, intro: $("mqIntro").value,
-      services: $("mqServ").value, about: $("mqAbout").value, phone: $("mqPhone").value, email: $("mqMail").value, address: $("mqAddr").value, accent: $("mqAccent").value } });
+      services: $("mqServ").value, about: $("mqAbout").value, phone: $("mqPhone").value, email: $("mqMail").value, address: $("mqAddr").value, accent: $("mqAccent").value, theme: $("mqTheme").value } });
     mqShow(maquette); toast("Corrections enregistrées : la maquette en ligne est à jour.");
     await loadMaquettes();
   } catch(e){ toast(e.message || "Enregistrement impossible."); }

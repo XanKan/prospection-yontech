@@ -498,6 +498,7 @@ Deno.serve(async (req) => {
       const data = { ...(row.data as SiteData) };
       for (const k of ["name", "tagline", "eyebrow", "intro", "phone", "email", "address", "city"] as const) if (k in v) data[k] = text(v[k], k === "intro" ? 400 : 160);
       if ("accent" in v && /^#[0-9a-f]{6}$/i.test(String(v.accent))) data.accent = String(v.accent).toLowerCase();
+      if ("theme" in v && ["atelier", "chantier", "moderne"].includes(String(v.theme))) data.theme = String(v.theme) as SiteData["theme"];
       if ("about" in v) data.about = text(v.about, 1600).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).slice(0, 3);
       if ("services" in v) data.services = text(v.services, 2000).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6).map((l) => { const [t, ...rest] = l.split(/\s*:\s*/); return { title: text(t, 70), text: text(rest.join(" : "), 240) }; });
       const saved = check(await db.from("yontech_maquettes").update({ data, company: data.name, html: renderSite(data), updated_at: new Date().toISOString() }).eq("id", row.id).select(MAQUETTE_COLUMNS + ",html").single()) as Rec;
