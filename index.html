@@ -656,6 +656,7 @@
             </div>
           </div>
           <div class="card-b">
+            <p class="note" id="mqPages" style="margin:0 0 10px"></p>
             <div class="mq-stage"><iframe id="mqFrame" title="Aperçu de la maquette" sandbox="allow-scripts allow-popups"></iframe></div>
             <div class="mq-tools">
               <form id="mqEdit" class="mq-edit">
@@ -1157,7 +1158,8 @@ function renderMqp(){
     return '<div class="mqp-item" data-id="' + r.id + '">' +
       '<a class="mqp-shot" href="' + esc(r.url) + '" target="_blank" rel="noopener" title="Ouvrir la maquette">' + (d.image ? '<img src="' + esc(d.image) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") + '<span style="background:' + esc(d.accent || "#444") + '">' + esc(d.tagline || r.company) + '</span></a>' +
       '<div class="mqp-main"><div class="who">' + esc(m.company || r.company) + '</div>' +
-        '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + ' · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
+        '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + " · " + (1 + (d.pages || []).length) + ' page(s) · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
+        (d.quality && d.quality.warnings && d.quality.warnings.length ? '<div class="meta" style="color:#b96c14"><b>À vérifier :</b> ' + esc(d.quality.warnings.join(" · ")) + '</div>' : "") +
         '<input class="inp" data-f="subject" maxlength="200" value="' + esc(r.mail_subject || s.subject) + '" aria-label="Objet">' +
         '<details><summary>Modifier le texte du mail</summary><textarea class="inp" data-f="body" rows="12" maxlength="6000" style="margin-top:8px">' + esc(r.mail_body || s.body) + '</textarea></details>' +
       '</div>' +
@@ -1275,7 +1277,7 @@ function renderMaquettes(){
   $("mqList").innerHTML = list.map(m => {
     const img = m.data && m.data.images && m.data.images[0];
     return '<li>' + (img ? '<img class="mq-thumb" src="' + esc(img) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="mq-thumb"></span>') +
-      '<div class="grow"><b>' + esc(m.company || m.slug) + '</b><span>' + esc(m.url.replace(/^https?:\/\//, "")) + " · " + (m.views || 0) + " vue(s)" + (m.emailed_at ? " · mail test le " + dateFr(m.emailed_at) : "") + (m.status === "retire" ? " · retirée" : "") + '</span></div>' +
+      '<div class="grow"><b>' + esc(m.company || m.slug) + '</b><span>' + esc(m.url.replace(/^https?:\/\//, "")) + " · " + (1 + ((m.data && m.data.pages) || []).length) + " page(s) · " + (m.views || 0) + " vue(s)" + (m.emailed_at ? " · mail test le " + dateFr(m.emailed_at) : "") + (m.status === "retire" ? " · retirée" : "") + '</span></div>' +
       '<span class="mq-sw" style="background:' + esc(m.data && m.data.accent || "#ccc") + '"></span>' +
       '<button type="button" class="b b-main b-xs" data-mq-view="' + m.id + '">Aperçu</button>' +
       '<a class="b b-out b-xs" href="' + esc(m.url) + '" target="_blank" rel="noopener">Lien ↗</a>' +
@@ -1290,6 +1292,8 @@ function mqShow(m){
   $("mqPrev").hidden = false;
   $("mqPrevT").textContent = "Aperçu · " + (m.company || m.slug);
   $("mqOpen").href = m.url;
+  const pgs = (d.pages || []);
+  $("mqPages").innerHTML = pgs.length ? "<b>Pages :</b> " + ['<a href="' + esc(m.url) + '" target="_blank" rel="noopener">Accueil</a>'].concat(pgs.map(p => '<a href="' + esc(/yontech\.fr$/.test(m.url) ? m.url + p.path : m.url) + '" target="_blank" rel="noopener">' + esc(p.label) + "</a>")).join(" · ") : "Une seule page (le site actuel n'a pas d'autres pages exploitables).";
   $("mqFrame").srcdoc = m.html || "";
   $("mqName").value = d.name || ""; $("mqTag").value = d.tagline || ""; $("mqEye").value = d.eyebrow || ""; $("mqIntro").value = d.intro || "";
   $("mqServ").value = (d.services || []).map(s => s.text ? s.title + " : " + s.text : s.title).join("\n");

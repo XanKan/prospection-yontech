@@ -3,7 +3,7 @@ import { prepareMaquettes, releaseStale } from "../_shared/yontech-maquette-jobs
 
 // Préparation quotidienne de la prospection par maquette. Réveillée par
 // pg_cron toutes les 10 minutes (yontech-maquettes-batch) ; prépare au plus
-// quatre prospects par passage jusqu'au quota du jour. N'envoie rien.
+// deux prospects par passage jusqu'au quota du jour. N'envoie rien.
 // Protégée par le secret de yontech_prospection_runtime.
 
 function json(data: unknown, status = 200) {
@@ -17,7 +17,8 @@ Deno.serve(async (req) => {
   if (allowed !== true) return json({ error: "Accès refusé" }, 403);
   try {
     const released = await releaseStale(db);
-    const result = await prepareMaquettes(db, { max: 4, budgetMs: 100_000 });
+    // Deux maquettes par passage : chaque site compte jusqu'à neuf pages à lire.
+    const result = await prepareMaquettes(db, { max: 2, budgetMs: 100_000 });
     return json({ ...result, released });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

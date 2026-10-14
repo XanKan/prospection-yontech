@@ -39,6 +39,15 @@ export async function maquetteDomainReady() {
 export function maquetteUrl(slug: string, ready: boolean) {
   return ready ? `https://${slug}.yontech.fr` : `https://prospection.yontech.fr/maquette.html?s=${slug}`;
 }
+// Pages intérieures d'une maquette : remplacées en bloc.
+export async function savePages(db: SupabaseClient, maquetteId: string, pages: { path: string; html: string }[]) {
+  await db.from("yontech_maquette_pages").delete().eq("maquette_id", maquetteId);
+  if (pages.length) {
+    const { error } = await db.from("yontech_maquette_pages").insert(pages.map((pg) => ({ maquette_id: maquetteId, path: pg.path, html: pg.html })));
+    if (error) throw error;
+  }
+}
+
 export async function uniqueSlug(db: SupabaseClient, wanted: string) {
   for (let i = 0; i < 20; i++) {
     const slug = i === 0 ? wanted : `${wanted.slice(0, 44)}-${i + 1}`;
@@ -95,6 +104,11 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", cand.email).maybeSingle();
     if (banned) { await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); continue; }
     const built = await buildSite(String(cand.data.site), { company: cand.company, metier: cand.data?.metier, ville: cand.data?.ville, email: cand.email });
+    if (!("error" in built) && built.data.quality && !built.data.quality.ok) {
+      failed++; errors.push(`${cand.company} : écartée (${built.data.quality.blocking.join(", ")})`);
+      await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: ("écartée : " + built.data.quality.blocking.join(", ")).slice(0, 120) } }).eq("id", cand.id);
+      continue;
+    }
     if ("error" in built) {
       failed++; errors.push(`${cand.company} : ${built.error}`);
       await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: built.error.slice(0, 120) } }).eq("id", cand.id);
@@ -104,11 +118,12 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     // Mail : un des modèles actifs de type « maquette » (écran Messages), au hasard.
     const { data: tpls } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("kind", "maquette").eq("active", true);
     const tpl = (tpls || []).length ? tpls![Math.floor(Math.random() * tpls!.length)] : null;
-    const { error } = await db.from("yontech_maquettes").insert({
+    const { data: inserted, error } = await db.from("yontech_maquettes").insert({
       slug, message_id: cand.id, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: built.html,
       status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(),
       template_id: tpl?.id || null, mail_subject: tpl?.subject || settings.maquette_subject || MAQUETTE_SUBJECT, mail_body: tpl?.body || settings.maquette_body || MAQUETTE_BODY,
-    });
+    }).select("id").single();
+    if (!error && inserted) await savePages(db, inserted.id, built.pages);
     if (error) {
       failed++; errors.push(`${cand.company} : ${error.message}`);
       await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: "erreur d'enregistrement" } }).eq("id", cand.id);

@@ -2,8 +2,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { BRAND, composeEmail, normalizeTarget, targetKey, templateVars, unknownVariables } from "../_shared/yontech-core.ts";
 import { deliver, smtpConfigured, smtpHost, smtpPort } from "../_shared/yontech-mail.ts";
 import { knownFor, maybeSource } from "../_shared/yontech-jobs.ts";
-import { buildSite, maquetteMailBlock, renderSite, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
-import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareMaquettes, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
+import { buildSite, maquetteMailBlock, renderAll, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
+import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareMaquettes, savePages, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
 
 // Point d'entrée unique de l'outil prospection.yontech.fr. Réservé aux
 // comptes Supabase Auth dont l'adresse figure dans le secret
@@ -425,7 +425,7 @@ Deno.serve(async (req) => {
       const midnight = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" }));
       midnight.setHours(0, 0, 0, 0);
       const s = settings.data as Rec;
-      const slim = (r: Rec) => ({ ...r, url: maquetteUrl(r.slug, ready), data: { accent: r.data?.accent, logo: r.data?.logo, image: r.data?.images?.[0] || "", tagline: r.data?.tagline, theme: r.data?.theme, city: r.data?.city } });
+      const slim = (r: Rec) => ({ ...r, url: maquetteUrl(r.slug, ready), data: { accent: r.data?.accent, logo: r.data?.logo, image: r.data?.images?.[0] || "", tagline: r.data?.tagline, theme: r.data?.theme, city: r.data?.city, quality: r.data?.quality || null, pages: (r.data?.pages || []).map((pg: Rec) => ({ path: pg.path, label: pg.label })) } });
       const sentRows = (sent.data || []) as Rec[];
       const preparedToday = ((pending.data || []) as Rec[]).concat(sentRows).filter((r) => r.prepared_at && new Date(r.prepared_at) >= new Date(Date.now() - (Date.now() - midnight.getTime()))).length;
       return response(req, {
@@ -546,7 +546,7 @@ Deno.serve(async (req) => {
         .map((m) => ({ id: m.id, company: m.company, email: m.email, status: m.status, site: m.data.site, ville: m.data.ville || "", metier: m.data.metier || "", constat: m.data.constat || "" }));
       return response(req, {
         domainReady: ready, adminEmail: user.email,
-        maquettes: (rows.data || []).map((r) => ({ ...r, data: { accent: r.data?.accent, logo: r.data?.logo, images: (r.data?.images || []).slice(0, 1) }, url: maquetteUrl(r.slug, ready) })),
+        maquettes: (rows.data || []).map((r) => ({ ...r, data: { accent: r.data?.accent, logo: r.data?.logo, images: (r.data?.images || []).slice(0, 1), pages: (r.data?.pages || []).map((pg: Rec) => ({ path: pg.path, label: pg.label })) }, url: maquetteUrl(r.slug, ready) })),
         candidates: list,
       });
     }
@@ -570,6 +570,7 @@ Deno.serve(async (req) => {
       const saved = (existing
         ? check(await db.from("yontech_maquettes").update(row).eq("id", existing.id).select(MAQUETTE_COLUMNS).single())
         : check(await db.from("yontech_maquettes").insert(row).select(MAQUETTE_COLUMNS).single())) as Rec;
+      await savePages(db, saved.id, built.pages);
       const ready = await maquetteDomainReady();
       return response(req, { maquette: { ...saved, url: maquetteUrl(saved.slug, ready) }, html: built.html });
     }
@@ -587,7 +588,9 @@ Deno.serve(async (req) => {
       if ("theme" in v && ["atelier", "chantier", "moderne"].includes(String(v.theme))) data.theme = String(v.theme) as SiteData["theme"];
       if ("about" in v) data.about = text(v.about, 1600).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).slice(0, 3);
       if ("services" in v) data.services = text(v.services, 2000).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6).map((l) => { const [t, ...rest] = l.split(/\s*:\s*/); return { title: text(t, 70), text: text(rest.join(" : "), 240) }; });
-      const saved = check(await db.from("yontech_maquettes").update({ data, company: data.name, html: renderSite(data), updated_at: new Date().toISOString() }).eq("id", row.id).select(MAQUETTE_COLUMNS + ",html").single()) as Rec;
+      const all = renderAll(data);
+      const saved = check(await db.from("yontech_maquettes").update({ data, company: data.name, html: all.home, updated_at: new Date().toISOString() }).eq("id", row.id).select(MAQUETTE_COLUMNS + ",html").single()) as Rec;
+      await savePages(db, row.id, all.pages);
       return response(req, { maquette: { ...saved, url: maquetteUrl(saved.slug, await maquetteDomainReady()) } });
     }
     if (action === "maquette.status") {
