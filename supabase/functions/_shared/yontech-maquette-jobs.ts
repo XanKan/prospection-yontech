@@ -98,21 +98,37 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
   // presque toute la capacité de calcul d'une exécution.
   let attempts = 0;
   while (todo > 0 && attempts < opts.max && Date.now() - started < opts.budgetMs) {
-    // Meilleur prospect « avec site » encore en file, jamais essayé.
-    const { data: cands } = await db.from("yontech_prospection_messages").select("id,email,company,data")
+    // 1. Meilleur prospect « avec site » encore en file, jamais essayé.
+    const { data: cands } = await db.from("yontech_prospection_messages").select("id,email,company,data,status,opened_at")
       .eq("status", "queued").eq("data->>campagne", "site").is("data->>maquette_essai", null)
       .order("score", { ascending: false, nullsFirst: false }).order("created_at").limit(10);
-    const cand = (cands || []).find((c) => c.data?.site && String(c.data?.sanssite) !== "true");
+    let cand = (cands || []).find((c) => c.data?.site && String(c.data?.sanssite) !== "true");
+    if (!cand) for (const c of cands || []) await db.from("yontech_prospection_messages").update({ data: { ...(c.data || {}), maquette_essai: "sans site" } }).eq("id", c.id);
+    // 2. À défaut : ceux qui ont ouvert le mail classique (vraie ouverture, pas de
+    //    réponse, envoyé depuis 24 h au moins), les plus récents ouvreurs d'abord.
     if (!cand) {
-      // Les fiches sans site de la sélection sont marquées pour ne pas être relues.
-      for (const c of cands || []) await db.from("yontech_prospection_messages").update({ data: { ...(c.data || {}), maquette_essai: "sans site" } }).eq("id", c.id);
-      if (!(cands || []).length) break;
-      continue;
+      const { data: openers } = await db.from("yontech_prospection_messages").select("id,email,company,data,status,opened_at")
+        .eq("status", "sent").eq("data->>campagne", "site").is("data->>maquette_essai", null)
+        .not("opened_at", "is", null).is("scanner_at", null).is("replied_at", null)
+        .lt("sent_at", new Date(Date.now() - 24 * 3_600_000).toISOString())
+        .order("opened_at", { ascending: false }).limit(20);
+      const list = (openers || []).filter((c) => c.data?.site && String(c.data?.sanssite) !== "true");
+      const { data: taken } = list.length ? await db.from("yontech_maquettes").select("message_id").in("message_id", list.map((c) => c.id)) : { data: [] };
+      const has = new Set((taken || []).map((x) => x.message_id));
+      cand = list.find((c) => !has.has(c.id));
     }
-    const { data: reserved } = await db.from("yontech_prospection_messages").update({ status: "maquette" }).eq("id", cand.id).eq("status", "queued").select("id").maybeSingle();
-    if (!reserved) continue;
+    if (!cand) break;
+    const fromQueue = cand.status === "queued";
+    // Prospect de la file : réservé (statut « maquette »). Prospect déjà contacté : statut inchangé.
+    if (fromQueue) {
+      const { data: reserved } = await db.from("yontech_prospection_messages").update({ status: "maquette" }).eq("id", cand.id).eq("status", "queued").select("id").maybeSingle();
+      if (!reserved) continue;
+    }
+    const release = async (essai: string) => {
+      await db.from("yontech_prospection_messages").update({ ...(fromQueue ? { status: "queued" } : {}), data: { ...(cand!.data || {}), maquette_essai: essai.slice(0, 120) } }).eq("id", cand!.id);
+    };
     const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", cand.email).maybeSingle();
-    if (banned) { await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); continue; }
+    if (banned) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); else await release("adresse exclue"); continue; }
     attempts++;
     // Marqué « essayé » avant la lecture : un site qui fait échouer l'exécution ne revient jamais en tête de file.
     await db.from("yontech_prospection_messages").update({ data: { ...(cand.data || {}), maquette_essai: "en cours" } }).eq("id", cand.id);
@@ -121,12 +137,12 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     catch (error) { built = { error: "lecture impossible : " + String((error as Error).message || error).slice(0, 80) }; }
     if (!("error" in built) && built.data.quality && !built.data.quality.ok) {
       failed++; errors.push(`${cand.company} : écartée (${built.data.quality.blocking.join(", ")})`);
-      await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: ("écartée : " + built.data.quality.blocking.join(", ")).slice(0, 120) } }).eq("id", cand.id);
+      await release("écartée : " + built.data.quality.blocking.join(", "));
       continue;
     }
     if ("error" in built) {
       failed++; errors.push(`${cand.company} : ${built.error}`);
-      await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: built.error.slice(0, 120) } }).eq("id", cand.id);
+      await release(built.error);
       continue;
     }
     const slug = await uniqueSlug(db, slugify(built.data.name));
@@ -141,9 +157,11 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     if (!error && inserted) await savePages(db, inserted.id, built.pages);
     if (error) {
       failed++; errors.push(`${cand.company} : ${error.message}`);
-      await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: "erreur d'enregistrement" } }).eq("id", cand.id);
+      await release("erreur d'enregistrement");
       continue;
     }
+    // Relances classiques en attente : annulées, la maquette prend le relais.
+    if (!fromQueue) await db.from("yontech_prospection_followups").delete().eq("message_id", cand.id).eq("status", "queued");
     prepared++; todo--;
   }
   return { state: "done", prepared, failed, errors: errors.slice(0, 5), today: (today || 0) + prepared };

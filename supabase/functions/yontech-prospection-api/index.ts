@@ -418,7 +418,7 @@ Deno.serve(async (req) => {
       const ready = await maquetteDomainReady();
       const [settings, pending, sent] = await Promise.all([
         db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_subject,maquette_body").eq("id", 1).single(),
-        db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data)").eq("review", "a_valider").order("prepared_at").limit(100),
+        db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data,status,opened_at,sent_at)").eq("review", "a_valider").order("prepared_at").limit(100),
         db.from("yontech_maquettes").select("id,slug,company,views,last_view_at,sent_at,review,data,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)").in("review", ["envoye"]).order("sent_at", { ascending: false }).limit(100),
       ]);
       for (const r of [settings, pending, sent]) if (r.error) throw r.error;
@@ -499,7 +499,9 @@ Deno.serve(async (req) => {
         }
         throw fail(`Envoi refusé : ${result.error}`, 502);
       }
-      check(await db.rpc("yontech_prospection_finish", { target_id: m.msg.id, outcome: "sent", target_template_id: m.maq.template_id || null, target_subject: result.subject, target_body: result.body, target_message_id: result.messageId }));
+      // Nouveau prospect : le message passe « envoyé ». Prospect déjà contacté (il a ouvert le mail
+      // classique) : l'historique du premier mail est conservé, la maquette est notée à côté.
+      if (m.msg.status !== "sent") check(await db.rpc("yontech_prospection_finish", { target_id: m.msg.id, outcome: "sent", target_template_id: m.maq.template_id || null, target_subject: result.subject, target_body: result.body, target_message_id: result.messageId }));
       await db.from("yontech_prospection_messages").update({ data: { ...(m.msg.data || {}), maquette: m.maq.slug } }).eq("id", m.msg.id);
       const now = new Date().toISOString();
       check(await db.from("yontech_maquettes").update({ review: "envoye", sent_at: now, emailed_at: now, email_to: m.msg.email, mail_subject: m.template.subject, mail_body: text(body ?? m.maq.mail_body, 6000) || m.maq.mail_body }).eq("id", id));
@@ -528,7 +530,9 @@ Deno.serve(async (req) => {
       if (maq.review !== "a_valider") throw fail("Ce mail a déjà été traité.");
       if (maq.message_id) {
         const { data: msg } = await db.from("yontech_prospection_messages").select("data").eq("id", maq.message_id).maybeSingle();
+        // Prospect de la file : rendu à l'automate classique. Prospect déjà contacté : statut inchangé, relances reprises.
         await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...((msg?.data as Rec) || {}), maquette_essai: "supprimée" } }).eq("id", maq.message_id).eq("status", "maquette");
+        await db.from("yontech_prospection_messages").update({ data: { ...((msg?.data as Rec) || {}), maquette_essai: "supprimée" } }).eq("id", maq.message_id).eq("status", "sent");
       }
       check(await db.from("yontech_maquettes").delete().eq("id", maq.id));
       return response(req, { ok: true });

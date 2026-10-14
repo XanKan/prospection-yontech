@@ -1165,6 +1165,7 @@ function renderMqp(){
     return '<div class="mqp-item" data-id="' + r.id + '">' +
       '<a class="mqp-shot" href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener" title="Ouvrir la maquette">' + (d.image ? '<img src="' + esc(d.image) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") + '<span style="background:' + esc(d.accent || "#444") + '">' + esc(d.tagline || r.company) + '</span></a>' +
       '<div class="mqp-main"><div class="who">' + esc(m.company || r.company) + '</div>' +
+        (m.status === "sent" ? '<div class="meta" style="color:var(--ok)"><b>Déjà contacté</b> par le mail classique le ' + dateFr(m.sent_at) + (m.opened_at ? ", ouvert le " + dateFr(m.opened_at) + " à " + timeFr(m.opened_at) : "") + ' : la maquette sert de relance.</div>' : "") +
         '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + " · " + (1 + (d.pages || []).length) + ' page(s) · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
         (d.quality && d.quality.warnings && d.quality.warnings.length ? '<div class="meta" style="color:#b96c14"><b>À vérifier :</b> ' + esc(d.quality.warnings.join(" · ")) + '</div>' : "") +
         '<input class="inp" data-f="subject" maxlength="200" value="' + esc(r.mail_subject || s.subject) + '" aria-label="Objet">' +
