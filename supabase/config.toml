@@ -33,3 +33,6 @@ verify_jwt = false
 # Suivi public des messages : pixel d'ouverture et redirection des liens.
 [functions.yontech-prospection-track]
 verify_jwt = false
+
+[functions.yontech-maquette]
+verify_jwt = false
