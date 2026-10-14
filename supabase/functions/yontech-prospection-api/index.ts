@@ -520,8 +520,8 @@ Deno.serve(async (req) => {
       if (maq.status !== "en_ligne") throw fail("Remettez d'abord la maquette en ligne.");
       const to = String(email(payload.to || user.email)).toLowerCase();
       const admins = (Deno.env.get("YONTECH_ADMIN_EMAILS") || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
-      const allowed = admins.includes(to) || to === String(settings.sender_email).toLowerCase() || /@(yontech\.fr|piloz\.fr)$/.test(to);
-      if (!allowed) throw fail("Mode test : l'e-mail ne peut partir que vers vos propres adresses (comptes de l'outil, @yontech.fr ou @piloz.fr), jamais vers le prospect.", 403);
+      const allowed = admins.includes(to) || to === String(settings.sender_email).toLowerCase() || /@yontech\.fr$/.test(to);
+      if (!allowed) throw fail("Mode test : l'e-mail ne peut partir que vers vos propres adresses (comptes de l'outil ou adresses @yontech.fr), jamais vers le prospect.", 403);
       const link = maquetteUrl(maq.slug, await maquetteDomainReady());
       let prospect: Record<string, unknown> = { entreprise: maq.company, site: maq.host };
       if (maq.message_id) {
