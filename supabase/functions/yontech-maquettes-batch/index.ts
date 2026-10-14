@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { prepareMaquettes, releaseStale } from "../_shared/yontech-maquette-jobs.ts";
+import { refreshStale } from "../_shared/yontech-maquette-refresh.ts";
 
 // Préparation quotidienne de la prospection par maquette. Réveillée par
 // pg_cron toutes les 5 minutes (yontech-maquettes-batch) ; prépare au plus
@@ -17,10 +18,12 @@ Deno.serve(async (req) => {
   if (allowed !== true) return json({ error: "Accès refusé" }, 403);
   try {
     const released = await releaseStale(db);
+    // Maquettes enregistrées avec un ancien gabarit : redessinées par lots.
+    const redrawn = await refreshStale(db, 15).catch((e) => { console.error("[Maquette rendu]", (e as Error).message); return 0; });
     // Une maquette par passage (toutes les 5 minutes) : lire jusqu'à neuf pages
     // et quarante images d'un site occupe une exécution entière.
     const result = await prepareMaquettes(db, { max: 1, budgetMs: 100_000 });
-    return json({ ...result, released });
+    return json({ ...result, released, redrawn });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[Yontech Maquettes] Erreur", message);

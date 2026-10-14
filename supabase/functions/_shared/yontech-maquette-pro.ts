@@ -50,6 +50,10 @@ const ICON: Record<string, string> = {
   route: '<path d="M3 11l19-9-9 19-2-8-8-2z"/>',
 };
 const icon = (n: string, s = 20) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ""}</svg>`;
+// Version du rendu, inscrite dans chaque page : à changer à chaque évolution du gabarit.
+// Les maquettes dont les pages portent une autre version sont redessinées
+// automatiquement (affichage et tâche planifiée), sans relire le site.
+export const RENDER_VERSION = "2026-10-14d";
 const short = (t: string, n: number) => { const s = String(t || "").trim(); return s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, "") + "…"; };
 const words = (t: string, n: number) => { const w = String(t || "").split(/\s+/).filter(Boolean); return w.length <= n ? w.join(" ") : w.slice(0, n).join(" ") + "…"; };
 
@@ -103,7 +107,7 @@ export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number
   // Puces sans IA : seulement des éléments de liste courts et propres (pas de « Titre : explication »).
   const bulletsFrom = (link?: string) => (pageOf(link)?.blocks || []).filter((b) => b.t === "li" && b.v.length >= 4 && b.v.length <= 60 && !/[:;]/.test(b.v)).slice(0, 3).map((b) => b.v.replace(/[.,]$/, ""));
   const services = c?.services.length
-    ? c.services.map((x) => { const src = x.source >= 0 ? d.services[x.source] : undefined; return { title: x.title, tag: x.tag, text: x.text, bullets: x.bullets, link: src?.link, image: px(src?.image) }; })
+    ? c.services.map((x) => { const src = x.source >= 0 ? d.services[x.source] : undefined; return { title: x.title, tag: x.tag.length === 30 ? x.tag.replace(/[\s,;·–-]+[^\s,;·–-]*$/, "") : x.tag, text: x.text, bullets: x.bullets, link: src?.link, image: px(src?.image) }; })
     : d.services.slice(0, 6).map((x) => ({ title: x.title, tag: "", text: firstSentence(x.text, 130), bullets: bulletsFrom(x.link), link: x.link, image: px(x.image) }));
   // Une photo n'apparaît qu'une fois : doublons remplacés par une photo encore libre ;
   // si toutes les prestations ne peuvent pas avoir la leur, aucune carte n'en a (cartes homogènes).
@@ -289,7 +293,7 @@ a.ln:hover{padding-left:12px}a.ln:hover .go{transform:translateX(6px)}a.ln:hover
 `;
 
   const head = (pageTitle: string, desc: string, current: string) => `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="yt-render" content="${RENDER_VERSION}">
 <title>${pageTitle}</title><meta name="description" content="${desc}"><meta name="theme-color" content="${inkCol}">
 <script>function fixGal(){var g=document.querySelector('#realisations .gal');if(!g)return;var n=g.children.length;if(n<3){g.closest('section').remove();return}while(g.children.length%2===0||g.children.length>5)g.lastElementChild.remove();g.classList.toggle('g3',g.children.length===3);if(g.firstElementChild)g.firstElementChild.classList.add('wide')}
 function yf(i){var f=i.closest('figure');if(f){f.remove();fixGal();return}if(i.classList.contains('hero-img')){var hc=i.closest('.hcol-img');if(hc){var ci=hc.parentNode;hc.remove();ci.classList.add('solo');return}var h=i.closest('.hero');i.remove();h.classList.add('flat');return}if(i.classList.contains('svc-img')){i.outerHTML='<div class="noimg"></div>';return}var p=i.closest('.phero');if(p){i.remove();return}i.style.display='none';if(i.hasAttribute('data-logo')){[].forEach.call(i.parentNode.querySelectorAll('[hidden]'),function(x){x.hidden=false})}}</script>

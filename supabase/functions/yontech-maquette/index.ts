@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { refreshRender, renderIsCurrent } from "../_shared/yontech-maquette-refresh.ts";
 
 // Sert une maquette de refonte par son slug et sa page (GET ?slug=dupont-menuiserie&path=/volets).
 // Public : appelée par le Worker Cloudflare de *.yontech.fr et par la page
@@ -20,8 +21,12 @@ Deno.serve(async (req) => {
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
   const path = String(url.searchParams.get("path") || "/").toLowerCase();
   if (path !== "/" && !/^\/[a-z0-9-]{1,60}$/.test(path)) return new Response("Page introuvable", { status: 404, headers: headers("text/plain; charset=utf-8") });
-  const { data: maq } = await db.from("yontech_maquettes").select("id,html").eq("slug", slug).eq("status", "en_ligne").maybeSingle();
+  const { data: maq } = await db.from("yontech_maquettes").select("id,html,data").eq("slug", slug).eq("status", "en_ligne").maybeSingle();
   if (!maq?.html) return new Response("Maquette introuvable", { status: 404, headers: headers("text/plain; charset=utf-8") });
+  // Gabarit plus récent que la page enregistrée : redessinée avant d'être servie.
+  if (maq.data && !renderIsCurrent(maq.html as string)) {
+    try { maq.html = (await refreshRender(db, { id: maq.id, data: maq.data })).home; } catch (e) { console.error("[Maquette rendu]", slug, (e as Error).message); }
+  }
   let data = { html: maq.html as string };
   if (path !== "/") {
     const { data: pg } = await db.from("yontech_maquette_pages").select("html").eq("maquette_id", maq.id).eq("path", path).maybeSingle();
