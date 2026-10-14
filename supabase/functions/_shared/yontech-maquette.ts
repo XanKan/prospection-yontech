@@ -40,7 +40,7 @@ type Raw = { url: string; host: string; html: string; css: string };
 
 /* ---------------- Téléchargement ---------------- */
 
-async function fetchRaw(url: string, timeoutMs = 8000): Promise<Raw | null> {
+async function fetchRaw(url: string, timeoutMs = 8000, maxBytes = MAX_BYTES): Promise<Raw | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -54,7 +54,7 @@ async function fetchRaw(url: string, timeoutMs = 8000): Promise<Raw | null> {
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let size = 0;
-    while (size < MAX_BYTES) {
+    while (size < maxBytes) {
       const { done, value } = await reader.read();
       if (done) break;
       if (value) { chunks.push(value); size += value.byteLength; }
@@ -63,7 +63,7 @@ async function fetchRaw(url: string, timeoutMs = 8000): Promise<Raw | null> {
     const all = new Uint8Array(size);
     let offset = 0;
     for (const c of chunks) { all.set(c, offset); offset += c.byteLength; }
-    const source = new TextDecoder("utf-8", { fatal: false }).decode(all.slice(0, MAX_BYTES));
+    const source = new TextDecoder("utf-8", { fatal: false }).decode(all.slice(0, maxBytes));
     // Les styles servent à trouver la couleur de marque, puis sont retirés avec
     // les scripts (sauf données structurées), les SVG et les commentaires.
     const css = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n").slice(0, 200_000) +
@@ -174,6 +174,18 @@ function inImageZone(el: Element, host: string) {
   return false;
 }
 
+// Analyse HTML protégée : une page illisible (vide, binaire, mal formée) est
+// ignorée au lieu d'interrompre toute la maquette.
+function safeDoc(html: string): Doc | null {
+  try {
+    const doc = parseHTML(/<html[\s>]/i.test(html) ? html : `<!doctype html><html><head></head><body>${html}</body></html>`).document;
+    return doc && doc.documentElement && doc.body ? doc : null;
+  } catch { return null; }
+}
+
+// Avis clients (Google, Trustpilot…) : jamais repris comme texte de l'entreprise.
+const REVIEW_RE = /publi[ée] sur google|avis google|google review|trustpilot|pages ?jaunes|\b[1-5](?:[.,]\d)?\s?\/\s?5\b|★|☆|\b\d+ (?:[ée]toiles|avis)\b|il y a \d+ (?:jours?|semaines?|mois|ans?)|\b(?:client|cliente) (?:satisfait|ravie?)|je recommande|nous recommandons vivement|merci (?:à|a) toute l'[ée]quipe/i;
+
 /* ---------------- Outils texte ---------------- */
 
 const clean = (value: unknown, max = 600) => String(value ?? "").replace(/\s+/g, " ").replace(/ /g, " ").trim().slice(0, max);
@@ -181,7 +193,7 @@ const clean = (value: unknown, max = 600) => String(value ?? "").replace(/\s+/g,
 const labelOf = (value: unknown, max = 60) => clean(value, max * 2).replace(/^[\s→←↗›»>‹«<·•|+*\-–—:]+|[\s→←↗›»>‹«<·•|+*\-–—:]+$/g, "").trim().slice(0, max);
 const BOILER_RE = /cookie|mentions l[ée]gales|tous droits|copyright|confidentialit|rgpd|newsletter|javascript|navigateur|cliquez|accepter|consentement|lorem ipsum|wordpress|elementor|site r[ée]alis[ée]|webmaster|plan du site|404|page introuvable/i;
 const GENERIC_HEADING_RE = /^(accueil|home|menu|contact(ez[- ]nous)?|nous contacter|nos coordonn[ée]es|coordonn[ée]es|suivez[- ]nous|newsletter|horaires?|plan d'acc[eè]s|acc[eè]s|recherche|rechercher|actualit[ée]s?|blog|news|avis( clients)?|t[ée]moignages?|liens? utiles|navigation|informations?|infos? pratiques|mentions l[ée]gales|partenaires|nos partenaires|d[ée]couvrir|en savoir plus|bienvenue.*|qui sommes[- ]nous\s*\??|[àa] propos|demande de devis|devis gratuit|footer|r[ée]seaux sociaux|panier|mon compte|connexion)$/i;
-const SECTION_RE = /^(retour.*|revenir.*|.*page d'accueil.*|(me|nous) contacter.*|contactez[- ]moi.*|savoir[- ]faire|professionnalisme|accompagnement|local|proximit[ée]|r[ée]activit[ée]|qualit[ée]|exp[ée]rience|expertise|confiance|engagement|garanties?|s[ée]rieux|transparence|[ée]coute|conseils?|disponibilit[ée]|efficacit[ée]|passion|valeurs|suivant|pr[ée]c[ée]dent|retour|lire la suite|voir plus|voir tout|en savoir plus|carri[eè]res?|nos m[ée]tiers|recrutement|emplois?|rejoignez[- ]nous.*|nous rejoindre|(notre|nos|l'|la|le|les)\s*(histoire|[ée]quipe|valeurs?|engagements?|entreprise|soci[ée]t[ée]|atelier|philosophie|mission|vision|chiffres?|clients?|partenaires|r[ée]f[ée]rences|r[ée]alisations|actualit[ée]s|avis)|venez nous.*|envoyez[- ]nous.*|appelez[- ]nous.*|[ée]crivez[- ]nous.*|contactez.*|trouvez[- ]nous.*|nous trouver|o[uù] nous trouver.*|demander? (un|votre) devis.*|obtenez.*devis.*|page\s?\d*|pourquoi nous choisir.*|pourquoi choisir.*|ils nous font confiance.*|faq|questions fr[ée]quentes)$/i;
+const SECTION_RE = /^((nos |les )?(services|prestations|activit[ée]s|solutions|produits|offres|expertises|domaines|m[ée]tiers|savoir-faire)( \+)?|tous nos services|toutes nos prestations|voir (tous|toutes).*|retour.*|revenir.*|.*page d'accueil.*|(me|nous) contacter.*|contactez[- ]moi.*|savoir[- ]faire|professionnalisme|accompagnement|local|proximit[ée]|r[ée]activit[ée]|qualit[ée]|exp[ée]rience|expertise|confiance|engagement|garanties?|s[ée]rieux|transparence|[ée]coute|conseils?|disponibilit[ée]|efficacit[ée]|passion|valeurs|suivant|pr[ée]c[ée]dent|retour|lire la suite|voir plus|voir tout|en savoir plus|carri[eè]res?|nos m[ée]tiers|recrutement|emplois?|rejoignez[- ]nous.*|nous rejoindre|(notre|nos|l'|la|le|les)\s*(histoire|[ée]quipe|valeurs?|engagements?|entreprise|soci[ée]t[ée]|atelier|philosophie|mission|vision|chiffres?|clients?|partenaires|r[ée]f[ée]rences|r[ée]alisations|actualit[ée]s|avis)|venez nous.*|envoyez[- ]nous.*|appelez[- ]nous.*|[ée]crivez[- ]nous.*|contactez.*|trouvez[- ]nous.*|nous trouver|o[uù] nous trouver.*|demander? (un|votre) devis.*|obtenez.*devis.*|page\s?\d*|pourquoi nous choisir.*|pourquoi choisir.*|ils nous font confiance.*|faq|questions fr[ée]quentes)$/i;
 // Réseaux sociaux, y compris les textes cachés des icônes (« Linkedin-in », « Facebook-f », « X-twitter »).
 const SOCIAL_RE = /^(fa[bsr]?[- ])?(insta(gram)?|facebook|fb|linkedin|youtube|tiktok|twitter|x|pinterest|whatsapp|google|avis google|viadeo|snapchat|threads)([- ][a-z]{1,10})?$/i;
 // Compte, recherche, langue, pages techniques : jamais des services.
@@ -353,17 +365,17 @@ function collect(doc: Doc, raw: Raw) {
   const org = ld.find((x) => /Organization|LocalBusiness|Store|Contractor|Service|Company|HomeAndConstruction|Electrician|Plumber|Roofing|Restaurant|Shop/i.test(String(x["@type"] || ""))) || {};
 
   const headings: { level: number; title: string; text: string }[] = [];
-  for (const h of doc.querySelectorAll("h1,h2,h3")) {
+  for (const h of [...doc.querySelectorAll("h1,h2,h3")].slice(0, 120)) {
     if (inChrome(h)) continue;
     const title = clean(h.textContent, 120);
     if (title.length < 3 || BOILER_RE.test(title)) continue;
     headings.push({ level: Number(h.tagName[1]), title, text: sectionText(h) });
   }
   const paragraphs: string[] = [];
-  for (const p of doc.querySelectorAll("p, .elementor-text-editor, .et_pb_text_inner")) {
+  for (const p of [...doc.querySelectorAll("p, .elementor-text-editor, .et_pb_text_inner")].slice(0, 250)) {
     if (inChrome(p)) continue;
     const t = clean(p.textContent, 900);
-    if (t.length >= 70 && !BOILER_RE.test(t) && !paragraphs.includes(t)) paragraphs.push(t);
+    if (t.length >= 70 && !BOILER_RE.test(t) && !REVIEW_RE.test(t) && !paragraphs.includes(t)) paragraphs.push(t);
   }
   const navItems: string[] = [];
   for (const a of doc.querySelectorAll("nav a, header a, .menu a")) {
@@ -377,7 +389,7 @@ function collect(doc: Doc, raw: Raw) {
     if (!url || images.some((i) => i.url === url)) return;
     images.push({ url, w, logo, header });
   };
-  for (const img of doc.querySelectorAll("img, source")) {
+  for (const img of [...doc.querySelectorAll("img, source")].slice(0, 150)) {
     const src = largestFromSrcset(img.getAttribute("srcset") || img.getAttribute("data-srcset")) || img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || img.getAttribute("data-original") || img.getAttribute("src") || "";
     const hint = [src, img.getAttribute("alt"), img.getAttribute("class"), img.getAttribute("id"), img.parentElement?.getAttribute("class")].join(" ");
     const w = Number(img.getAttribute("width") || 0);
@@ -540,7 +552,7 @@ function contentBlocks(doc: Doc, base: string) {
   const blocks: Block[] = [];
   const seen = new Set<string>();
   let chars = 0;
-  for (const el of doc.querySelectorAll("h1,h2,h3,h4,p,li,img")) {
+  for (const el of [...doc.querySelectorAll("h1,h2,h3,h4,p,li,img")].slice(0, 400)) {
     if (blocks.length >= 60 || chars > 7000) break;
     if (inChrome(el)) continue;
     const tag = el.tagName.toLowerCase();
@@ -555,7 +567,7 @@ function contentBlocks(doc: Doc, base: string) {
     if (tag === "li" && el.querySelector("p,li")) continue;
     const text = clean(el.textContent, 900);
     const key = text.toLowerCase();
-    if (!text || seen.has(key) || BOILER_RE.test(text)) continue;
+    if (!text || seen.has(key) || BOILER_RE.test(text) || REVIEW_RE.test(text)) continue;
     if (tag[0] === "h") {
       if (text.length < 3 || text.length > 110 || SOCIAL_RE.test(text) || ACCOUNT_RE.test(text)) continue;
       seen.add(key); blocks.push({ t: "h", v: sentenceCase(text) }); chars += text.length;
@@ -608,7 +620,8 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
   if (!/^https?:\/\//i.test(start)) start = "https://" + start.replace(/^\/+/, "");
   const home = await fetchRaw(start) || (start.startsWith("https://") ? await fetchRaw(start.replace("https://", "http://")) : null);
   if (!home) return { error: "Le site ne répond pas ou n'est pas une page HTML." };
-  const doc = parseHTML(home.html).document;
+  const doc = safeDoc(home.html);
+  if (!doc) return { error: "La page d'accueil du site actuel est illisible." };
   const c = collect(doc, home);
 
   // Toutes les pages du menu du site actuel (huit au plus), plus une page
@@ -624,11 +637,13 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
     const norm = l.url.replace(/[#?].*$/, "").replace(/\/$/, "");
     if (norm !== home.url.replace(/[#?].*$/, "").replace(/\/$/, "") && !menu.some((m) => m.url === norm)) menu.push({ url: norm, label });
   }
-  const crawl = menu.slice(0, 8);
-  const fetched = await mapLimit(crawl, 4, (l) => fetchRaw(l.url, 6000));
-  const subs = crawl.map((link, i) => ({ link, raw: fetched[i] })).filter((x) => x.raw).map((x) => {
-    const sdoc = parseHTML(x.raw!.html).document;
-    return { link: x.link, raw: x.raw!, c: collect(sdoc, x.raw!), blocks: contentBlocks(sdoc, x.raw!.url) };
+  // Six pages au plus : au-delà, la lecture dépasse la capacité de calcul d'une exécution.
+  const crawl = menu.slice(0, 6);
+  const fetched = await mapLimit(crawl, 4, (l) => fetchRaw(l.url, 6000, 350_000));
+  const subs = crawl.map((link, i) => ({ link, raw: fetched[i] })).filter((x) => x.raw).flatMap((x) => {
+    const sdoc = safeDoc(x.raw!.html);
+    if (!sdoc) return [];
+    try { return [{ link: x.link, raw: x.raw!, c: collect(sdoc, x.raw!), blocks: contentBlocks(sdoc, x.raw!.url) }]; } catch { return []; }
   });
   const extras = subs.map((x) => x.raw);
   const extraCollected = subs.map((x) => x.c);
@@ -650,6 +665,8 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
     // Un service est un intitulé court (« Volets roulants »), pas une phrase, une
     // question, un bout de phrase ni un titre qui répète le nom de l'entreprise.
     const words = title.split(/\s+/).length;
+    // Actions et rubriques du menu (devis, contact, recrutement, documents…) : jamais des prestations.
+    if (/carri[eè]re|recrut|emploi|candidat|espace (client|pro|membre|partenaire)|\bstage\b|alternance|devis|contact|rendez-vous|rdv|t[ée]l[ée]charg|brochure|catalogue|documentation|plan d'acc[eè]s|mentions|actualit|blog|galerie|r[ée]alisations|photos|vid[ée]os?|avis|t[ée]moignage|faq|tarifs?|prix/i.test(title)) return;
     if (words > 7 || /\?/.test(title) || /,/.test(title) || /^[a-zà-ÿ]/.test(title) || /^(je|nous|vous|on|notre|nos|votre|vos|un|une|des|besoin|pourquoi|comment|quand|d[ée]couvrez|contactez|appelez|demandez|profitez|bienvenue|rencontrons|parlons|faites|confiez|offrez|donnez|imaginons|construisons|r[ée]alisons|cr[ée]ons)\b/i.test(title) ||
       (compact(lowerName).length >= 4 && compact(title).includes(compact(lowerName)))) return;
     if (!key || seen.has(key) || GENERIC_HEADING_RE.test(title) || SECTION_RE.test(title) || SOCIAL_RE.test(title) || ACCOUNT_RE.test(title) || /^[\d\s.+()-]{6,}$/.test(title) || /@|https?:|www\./i.test(title) || title.toLowerCase() === lowerName || title.length > 70 || /[?!]$/.test(title) && title.length > 50) return;
@@ -755,6 +772,12 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
   const heroImage = take([...photos].sort((a, b) => heroScore(b) - heroScore(a))[0]?.u);
   const serviceImage = new Map<string, string>();
 
+  // Paragraphes répétés d'une page à l'autre (bandeau commun du site) : jamais
+  // utilisés comme description propre d'une page ou d'une prestation.
+  const pCount = new Map<string, number>();
+  for (const p of [...c.paragraphs, ...subs.flatMap((x) => x.blocks.filter((b) => b.t === "p").map((b) => b.v))]) pCount.set(compact(p).slice(0, 120), (pCount.get(compact(p).slice(0, 120)) || 0) + 1);
+  const ownParagraph = (blocks: Block[]) => blocks.find((b) => b.t === "p" && b.v.length >= 60 && (pCount.get(compact(b.v).slice(0, 120)) || 0) <= 1)?.v || "";
+
   // Une page par entrée du menu qui a du contenu (sauf contact, repris partout).
   const pages: PageModel[] = [];
   const usedPaths = new Set<string>(["contact"]);
@@ -784,7 +807,7 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
     usedPaths.add(path);
     const h1 = x.c.headings.find((h) => h.level === 1)?.title || "";
     const title = sentenceCase(dropName(h1 && h1.length <= 90 && compact(h1) !== compact(name) ? h1 : label));
-    const intro = sentence(blocks.find((b) => b.t === "p" && b.v.length >= 60)?.v || "", 220);
+    const intro = sentence(ownParagraph(blocks), 220);
     const pageHero = isGallery ? "" : own[0] || "";
     take(pageHero); bodyImgs.forEach((u) => take(u));
     // Carte du service sur l'accueil : une autre photo de la page si possible.

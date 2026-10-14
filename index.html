@@ -1249,7 +1249,9 @@ $("bMqpPrep").addEventListener("click", async () => {
     while (prepared < want && tries < want + 4){
       tries++;
       busy($("bMqpPrep"), true, "Préparation " + (prepared + 1) + "/" + want + "…");
-      const r = await api("mqp.prepare", {});
+      let r;
+      // Un site trop lourd fait échouer son appel : on passe au suivant.
+      try { r = await api("mqp.prepare", {}); } catch(e){ failed++; continue; }
       prepared += r.prepared || 0; failed += r.failed || 0;
       if (!r.prepared && !r.failed) break;
       await loadMqp().catch(() => {});

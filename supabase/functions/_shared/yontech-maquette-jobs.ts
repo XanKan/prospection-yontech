@@ -94,7 +94,10 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
   if (opts.force) todo = opts.max;
   let prepared = 0, failed = 0;
   const errors: string[] = [];
-  while (todo > 0 && Date.now() - started < opts.budgetMs) {
+  // Au plus « max » sites lus par appel, retenus ou écartés : un site occupe
+  // presque toute la capacité de calcul d'une exécution.
+  let attempts = 0;
+  while (todo > 0 && attempts < opts.max && Date.now() - started < opts.budgetMs) {
     // Meilleur prospect « avec site » encore en file, jamais essayé.
     const { data: cands } = await db.from("yontech_prospection_messages").select("id,email,company,data")
       .eq("status", "queued").eq("data->>campagne", "site").is("data->>maquette_essai", null)
@@ -110,7 +113,12 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     if (!reserved) continue;
     const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", cand.email).maybeSingle();
     if (banned) { await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); continue; }
-    const built = await buildSite(String(cand.data.site), { company: cand.company, metier: cand.data?.metier, ville: cand.data?.ville, cp: cand.data?.cp, email: cand.email });
+    attempts++;
+    // Marqué « essayé » avant la lecture : un site qui fait échouer l'exécution ne revient jamais en tête de file.
+    await db.from("yontech_prospection_messages").update({ data: { ...(cand.data || {}), maquette_essai: "en cours" } }).eq("id", cand.id);
+    let built: Awaited<ReturnType<typeof buildSite>>;
+    try { built = await buildSite(String(cand.data.site), { company: cand.company, metier: cand.data?.metier, ville: cand.data?.ville, cp: cand.data?.cp, email: cand.email }); }
+    catch (error) { built = { error: "lecture impossible : " + String((error as Error).message || error).slice(0, 80) }; }
     if (!("error" in built) && built.data.quality && !built.data.quality.ok) {
       failed++; errors.push(`${cand.company} : écartée (${built.data.quality.blocking.join(", ")})`);
       await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: ("écartée : " + built.data.quality.blocking.join(", ")).slice(0, 120) } }).eq("id", cand.id);
