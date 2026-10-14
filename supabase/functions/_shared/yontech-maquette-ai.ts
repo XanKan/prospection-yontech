@@ -50,6 +50,7 @@ RÈGLES ABSOLUES
 - N'invente AUCUN fait : pas de chiffre, d'année, de nombre de clients, de label (RGE, Qualibat…), de garantie, de délai, de prix, de « gratuit », de zone d'intervention ou de prestation qui ne figure pas dans la source. Tu peux reformuler, résumer, regrouper.
 - Si une information manque, laisse le champ vide ("" ou []), ne comble pas.
 - Textes courts : titre 4 à 9 mots, sans le nom de l'entreprise ; phrases simples ; pas de majuscules partout ; pas d'emoji.
+- Relis l'orthographe et les accords (sujet, verbe, genre, nombre) : aucune faute n'est acceptable.
 - Les étapes « comment ça se passe » peuvent être génériques et propres au métier (prise de contact, visite, devis, réalisation, suivi), sans promesse chiffrée.
 
 Réponds UNIQUEMENT par un objet JSON valide, de cette forme :
@@ -78,12 +79,14 @@ ${sourceText(d, extra)}`;
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 3500, messages: [{ role: "user", content: prompt }] }),
-      signal: AbortSignal.timeout(75_000),
+      body: JSON.stringify({ model: MODEL, max_tokens: 8000, messages: [{ role: "user", content: prompt }] }),
+      signal: AbortSignal.timeout(100_000),
     });
     if (!response.ok) { console.error("[Maquette IA]", response.status, (await response.text()).slice(0, 300)); return null; }
     const out = await response.json();
-    const text = String(out?.content?.[0]?.text || "");
+    // La réponse peut commencer par un bloc de réflexion : seul le bloc texte compte.
+    const text = String((out?.content || []).filter((b: { type?: string }) => b.type === "text").map((b: { text?: string }) => b.text || "").join(""));
+    if (out?.stop_reason === "max_tokens") console.error("[Maquette IA] réponse coupée");
     const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const nServices = d.services.length;
     const copy: Copy = {

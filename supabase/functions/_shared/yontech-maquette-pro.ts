@@ -162,7 +162,7 @@ header.top{position:sticky;top:0;z-index:30;background:${dark ? `hsl(${h} 30% 10
 .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 40%}
 .hero-shade{position:absolute;inset:0;background:linear-gradient(90deg,hsl(${h} 45% 8% / .86) 0%,hsl(${h} 45% 8% / .58) 45%,hsl(${h} 45% 8% / .06) 80%),linear-gradient(0deg,hsl(${h} 45% 8% / .55),transparent 45%)}
 .hero-in{position:relative;width:100%;padding-block:120px ${dark && highlights.length ? "120px" : "64px"};color:#fff}
-.hero-kicker{font-weight:600;font-size:.95rem;color:var(--sun-light)}
+.hero-kicker{font-weight:600;font-size:.95rem;color:rgba(255,255,255,.92);display:inline-flex;align-items:center;gap:10px}.hero-kicker:before{content:"";width:28px;height:3px;border-radius:2px;background:var(--sun-light)}
 .hero h1{font-size:clamp(2.2rem,1.3rem + 3.6vw,4.2rem);font-weight:${F.weight};max-width:14em;margin-top:12px;color:#fff}
 .hero-lead{font-size:1.15rem;color:rgba(255,255,255,.88);max-width:36em;margin-top:18px}
 .hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
@@ -198,7 +198,7 @@ a.svc:hover{transform:translateY(-4px);box-shadow:0 24px 44px -28px rgba(0,0,0,.
 .step:last-child:after{display:none}.step h3{margin-bottom:8px}.step p{color:var(--ink-soft);font-size:.97rem}
 .gal{display:grid;grid-template-columns:2fr 1fr 1fr;grid-auto-rows:210px;gap:12px}
 .gal figure{margin:0;position:relative;border-radius:var(--r);overflow:hidden;background:var(--sky)}
-.gal figure.wide{grid-row:span 2}.gal img{width:100%;height:100%;object-fit:cover;transition:transform .6s}.gal figure:hover img{transform:scale(1.05)}
+.gal figure.wide{grid-row:span 2}.gal.g3{grid-template-columns:2fr 1fr}.gal img{width:100%;height:100%;object-fit:cover;transition:transform .6s}.gal figure:hover img{transform:scale(1.05)}
 .gal figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px 14px 12px;background:linear-gradient(0deg,rgba(0,0,0,.65),transparent);color:#fff;font-size:.85rem;font-weight:600}
 .about{display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:start}
 .big{font-family:var(--fd);font-weight:800;font-size:clamp(3.6rem,2rem + 6vw,6.4rem);line-height:1;color:var(--sun-ink)}
@@ -250,7 +250,7 @@ footer{background:${inkCol};color:rgba(255,255,255,.7);font-size:.95rem}
   const head = (pageTitle: string, desc: string, current: string) => `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>${pageTitle}</title><meta name="description" content="${desc}"><meta name="theme-color" content="${inkCol}">
-<script>function fixGal(){var g=document.querySelector('#realisations .gal');if(!g)return;var n=g.children.length;if(n<3){g.closest('section').remove();return}while(g.children.length%2===0||g.children.length>7)g.lastElementChild.remove();if(g.firstElementChild)g.firstElementChild.classList.add('wide')}
+<script>function fixGal(){var g=document.querySelector('#realisations .gal');if(!g)return;var n=g.children.length;if(n<3){g.closest('section').remove();return}while(g.children.length%2===0||g.children.length>5)g.lastElementChild.remove();g.classList.toggle('g3',g.children.length===3);if(g.firstElementChild)g.firstElementChild.classList.add('wide')}
 function yf(i){var f=i.closest('figure');if(f){f.remove();fixGal();return}if(i.classList.contains('hero-img')){var h=i.closest('.hero');i.remove();h.classList.add('flat');return}if(i.classList.contains('svc-img')){i.outerHTML='<div class="noimg"></div>';return}var p=i.closest('.phero');if(p){i.remove();return}i.style.display='none';if(i.hasAttribute('data-logo')){[].forEach.call(i.parentNode.querySelectorAll('[hidden]'),function(x){x.hidden=false})}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?${F.link}&display=swap" rel="stylesheet">
@@ -287,10 +287,10 @@ ${c?.extras.length ? `<div class="chips">${c.extras.map((x) => `<span>${e(x)}</s
 <div class="steps">${steps.map((x) => `<div class="step rv"><h3>${e(x.title)}</h3><p>${e(x.text)}</p></div>`).join("")}</div>
 </div></section>`;
 
-  const gal = gallery.slice(0, gallery.length >= 7 ? 7 : gallery.length >= 5 ? 5 : 3);
+  const gal = gallery.slice(0, gallery.length >= 5 ? 5 : 3);
   const galleryHtml = gal.length >= 3 ? `<section class="sec" id="realisations"><div class="wrap">
 <div class="head"><div><p class="eyebrow">Réalisations</p>${H2(c?.galleryTitle || "Nos réalisations")}</div></div>
-<div class="gal">${gal.map((g, i) => `<figure class="${i === 0 ? "wide" : ""} rv">${img(g, c?.captions[i] || `Réalisation ${d.name}`)}${c?.captions[i] ? `<figcaption>${e(c.captions[i])}</figcaption>` : ""}</figure>`).join("")}</div>
+<div class="gal${gal.length === 3 ? " g3" : ""}">${gal.map((g, i) => `<figure class="${i === 0 ? "wide" : ""} rv">${img(g, c?.captions[i] || `Réalisation ${d.name}`)}${c?.captions[i] ? `<figcaption>${e(c.captions[i])}</figcaption>` : ""}</figure>`).join("")}</div>
 </div></section>` : "";
 
   const aboutHtml = aboutText ? `<section class="sec sky" id="entreprise"><div class="wrap about">
