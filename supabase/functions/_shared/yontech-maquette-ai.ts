@@ -24,7 +24,13 @@ export type Copy = {
 export const SECTION_KEYS = ["services", "band", "steps", "gallery", "about", "certs"];
 
 const MODEL = "claude-sonnet-5-5";
-const cut = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+// Coupe propre : jamais au milieu d'un mot ni sur une virgule pendante.
+const cut = (v: unknown, n: number) => {
+  const t = String(v ?? "").replace(/\s+/g, " ").trim();
+  if (t.length <= n) return t;
+  const head = t.slice(0, n), i = head.lastIndexOf(" ");
+  return (i > n * 0.5 ? head.slice(0, i) : head).replace(/[\s,;:·–—\-]+$/, "").replace(/\s+(et|ou|de|des|du|la|le|les|à|au|aux|en|pour|avec|&)$/i, "");
+};
 const arr = <T>(v: unknown, n: number, f: (x: Record<string, unknown>) => T | null): T[] =>
   (Array.isArray(v) ? v : []).slice(0, n).map((x) => (x && typeof x === "object" ? f(x as Record<string, unknown>) : null)).filter(Boolean) as T[];
 
@@ -105,7 +111,7 @@ ${sourceText(d, extra)}`;
       highlights: arr(json.highlights, 3, (x) => x.title ? { title: cut(x.title, 40), text: cut(x.text, 140) } : null),
       stats: arr(json.stats, 4, (x) => x.value ? { value: cut(x.value, 16), label: cut(x.label, 40) } : null),
       servicesTitle: cut(json.servicesTitle, 70), servicesLead: cut(json.servicesLead, 200),
-      services: arr(json.services, 6, (x) => x.title ? { source: Number.isInteger(x.source) && Number(x.source) < nServices ? Number(x.source) : -1, title: cut(x.title, 50), tag: cut(x.tag, 30), text: cut(x.text, 170), bullets: Array.isArray(x.bullets) ? (x.bullets as unknown[]).slice(0, 3).map((b) => cut(b, 70)).filter(Boolean) : [] } : null),
+      services: arr(json.services, 6, (x) => x.title ? { source: Number.isInteger(x.source) && Number(x.source) < nServices ? Number(x.source) : -1, title: cut(x.title, 50), tag: cut(x.tag, 42), text: cut(x.text, 170), bullets: Array.isArray(x.bullets) ? (x.bullets as unknown[]).slice(0, 3).map((b) => cut(b, 70)).filter(Boolean) : [] } : null),
       extras: (Array.isArray(json.extras) ? json.extras : []).slice(0, 6).map((x: unknown) => cut(x, 40)).filter(Boolean),
       band: json.band && json.band.title && Array.isArray(json.band.columns) && json.band.columns.length >= 2
         ? { kicker: cut(json.band.kicker, 60), title: cut(json.band.title, 80), text: cut(json.band.text, 200), columns: arr(json.band.columns, 3, (c) => c.title ? { label: cut(c.label, 40), title: cut(c.title, 50), text: cut(c.text, 220) } : null) }

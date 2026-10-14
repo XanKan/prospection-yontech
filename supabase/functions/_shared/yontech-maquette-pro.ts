@@ -105,6 +105,19 @@ export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number
   const services = c?.services.length
     ? c.services.map((x) => { const src = x.source >= 0 ? d.services[x.source] : undefined; return { title: x.title, tag: x.tag, text: x.text, bullets: x.bullets, link: src?.link, image: px(src?.image) }; })
     : d.services.slice(0, 6).map((x) => ({ title: x.title, tag: "", text: firstSentence(x.text, 130), bullets: bulletsFrom(x.link), link: x.link, image: px(x.image) }));
+  // Une photo n'apparaît qu'une fois : doublons remplacés par une photo encore libre ;
+  // si toutes les prestations ne peuvent pas avoir la leur, aucune carte n'en a (cartes homogènes).
+  {
+    const taken = new Set([heroImg, aboutImg, px(d.bandImage), ...gallery].filter(Boolean));
+    const spare = d.images.map(px).filter((u) => u && !taken.has(u) && !services.some((x) => x.image === u));
+    const seen = new Set<string>();
+    for (const x of services) {
+      if (x.image && (seen.has(x.image) || taken.has(x.image))) x.image = "";
+      if (!x.image) x.image = spare.shift() || "";
+      if (x.image) seen.add(x.image);
+    }
+    if (services.some((x) => !x.image)) services.forEach((x) => (x.image = ""));
+  }
   const stats = c?.stats.length ? c.stats : (d.facts || []).slice(0, 4);
   // Atouts : textes de l'IA, sinon uniquement des informations réelles et bien titrées.
   const cleanAddr = (d.address || "").replace(/\s+(Facebook|Linked[Ii]n|Instagram|Twitter|YouTube|Youtube|TikTok|Google|Plan|Voir|Suivez)\b.*$/i, "");
@@ -125,7 +138,8 @@ export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number
   const cp = (d.address.match(/\b\d{5}\b/) || [])[0] || d.cp || "";
   const mapQ = /\b\d{5}\b/.test(d.address) ? `${d.address}, France` : d.city ? `${[cp, d.city].filter(Boolean).join(" ")}, France` : "";
   const mapEnc = encodeURIComponent(mapQ);
-  const heroMode: "chiffres" | "atouts" | "colonnes" = dz ? dz.hero : opts.hero === "b" ? "atouts" : "chiffres";
+  let heroMode: "chiffres" | "atouts" | "colonnes" = dz ? dz.hero : opts.hero === "b" ? "atouts" : "chiffres";
+  if (heroMode === "colonnes" && !heroImg) heroMode = "chiffres"; // jamais de colonne vide
   const dark = heroMode === "atouts";
   const servicesMode = dz?.services || "cartes";
   const galleryMode = dz?.gallery || "mosaique";
@@ -248,6 +262,7 @@ footer{background:${inkCol};color:rgba(255,255,255,.7);font-size:.95rem}
 .hcol h1{font-size:clamp(2.3rem,1.4rem + 3.4vw,4rem);font-weight:${F.weight};margin:6px 0 18px}.hcol .lead{font-size:1.15rem;color:var(--ink-soft);max-width:34em}
 .hcol .btn-out{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
 .hcol-img{position:relative}.hcol-img img,.hcol-img .ph-box{width:100%;aspect-ratio:4/4.4;object-fit:cover;border-radius:calc(var(--r) * 1.6);box-shadow:0 40px 70px -40px rgba(0,0,0,.45)}
+.hcol-img .hero-img{position:relative;inset:auto;height:auto;display:block}.hcol-in.solo{grid-template-columns:1fr}.hcol-in.solo .lead{max-width:40em}
 .hcol-img:before{content:"";position:absolute;inset:24px -18px -18px 24px;border-radius:calc(var(--r) * 1.6);background:var(--sun);opacity:.16;z-index:-1}
 .ph-box{display:grid;place-items:center;background:linear-gradient(135deg,var(--sun),var(--ink));color:#fff;font:800 80px var(--fd)}
 .hstats{display:flex;gap:34px;flex-wrap:wrap;margin-top:34px;padding-top:24px;border-top:1px solid var(--line)}.hstats b{display:block;font-family:var(--fd);font-size:1.7rem;color:var(--sun-ink)}.hstats span{font-size:.9rem;color:var(--ink-soft)}
@@ -257,7 +272,9 @@ footer{background:${inkCol};color:rgba(255,255,255,.7);font-size:.95rem}
 .ln p{color:var(--ink-soft);font-size:.97rem}.ln .go{color:var(--sun-ink);transition:transform .3s}
 .ln .lpv{position:absolute;right:70px;top:50%;width:200px;height:136px;object-fit:cover;border-radius:12px;transform:translateY(-50%) rotate(-3deg) scale(.9);opacity:0!important;pointer-events:none;transition:opacity .3s,transform .3s;box-shadow:0 20px 40px -20px rgba(0,0,0,.5)}
 a.ln:hover{padding-left:12px}a.ln:hover .go{transform:translateX(6px)}a.ln:hover .lpv.ok{opacity:1!important;transform:translateY(-50%) rotate(-3deg) scale(1)}
-.svcs.big{grid-template-columns:repeat(2,1fr)}.svcs.big .svc-img{aspect-ratio:16/9}.svcs.big h3{font-size:1.5rem}
+.svcs.big{grid-template-columns:repeat(2,1fr)}
+@media (min-width:981px){.svcs.five{grid-template-columns:repeat(6,1fr)}.svcs.five>*{grid-column:span 2}.svcs.five>:nth-child(-n+2){grid-column:span 3}.svcs.five>:nth-child(-n+2) .svc-img{aspect-ratio:16/9}}
+@media (min-width:601px) and (max-width:980px){.svcs.five>:last-child{grid-column:1/-1}}.svcs.big .svc-img{aspect-ratio:16/9}.svcs.big h3{font-size:1.5rem}
 .gal.strip{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;padding-bottom:10px;grid-template-columns:none}.gal.strip figure{flex:0 0 min(420px,80%);height:340px;scroll-snap-align:start}
 .rv{opacity:0;transform:translateY(18px);transition:opacity .7s,transform .7s}.rv.in{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
@@ -275,7 +292,7 @@ a.ln:hover{padding-left:12px}a.ln:hover .go{transform:translateX(6px)}a.ln:hover
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>${pageTitle}</title><meta name="description" content="${desc}"><meta name="theme-color" content="${inkCol}">
 <script>function fixGal(){var g=document.querySelector('#realisations .gal');if(!g)return;var n=g.children.length;if(n<3){g.closest('section').remove();return}while(g.children.length%2===0||g.children.length>5)g.lastElementChild.remove();g.classList.toggle('g3',g.children.length===3);if(g.firstElementChild)g.firstElementChild.classList.add('wide')}
-function yf(i){var f=i.closest('figure');if(f){f.remove();fixGal();return}if(i.classList.contains('hero-img')){var h=i.closest('.hero');i.remove();h.classList.add('flat');return}if(i.classList.contains('svc-img')){i.outerHTML='<div class="noimg"></div>';return}var p=i.closest('.phero');if(p){i.remove();return}i.style.display='none';if(i.hasAttribute('data-logo')){[].forEach.call(i.parentNode.querySelectorAll('[hidden]'),function(x){x.hidden=false})}}</script>
+function yf(i){var f=i.closest('figure');if(f){f.remove();fixGal();return}if(i.classList.contains('hero-img')){var hc=i.closest('.hcol-img');if(hc){var ci=hc.parentNode;hc.remove();ci.classList.add('solo');return}var h=i.closest('.hero');i.remove();h.classList.add('flat');return}if(i.classList.contains('svc-img')){i.outerHTML='<div class="noimg"></div>';return}var p=i.closest('.phero');if(p){i.remove();return}i.style.display='none';if(i.hasAttribute('data-logo')){[].forEach.call(i.parentNode.querySelectorAll('[hidden]'),function(x){x.hidden=false})}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?${F.link}&display=swap" rel="stylesheet">
 <style>${css}</style></head><body>
@@ -291,7 +308,7 @@ ${d.phone ? `<a class="phone-top" href="${e(tel)}">${e(d.phone)}</a>` : ""}<a cl
   const heroHtml = heroMode === "colonnes" ? `<section class="hcol" id="accueil"><div class="wrap hcol-in"><div>${kicker ? `<p class="eyebrow rv">${e(kicker)}</p>` : ""}<h1 class="rv">${e(title)}</h1>${lead ? `<p class="lead rv">${e(lead)}</p>` : ""}
 <div class="hero-cta rv"><a class="btn btn-sun" href="#contact">${e(cta)}</a>${d.phone ? `<a class="btn btn-out" href="${e(tel)}">${icon("phone", 16)}${e(d.phone)}</a>` : ""}</div>
 ${stats.length ? `<div class="hstats rv">${stats.slice(0, 3).map((x) => `<div><b>${e(x.value)}</b><span>${e(x.label)}</span></div>`).join("")}</div>` : ""}</div>
-<div class="hcol-img rv">${heroImg ? img(heroImg, d.name, "hero-img", false) : `<div class="ph-box">${e(initials)}</div>`}</div></div></section>
+<div class="hcol-img rv">${img(heroImg, d.name, "hero-img", false)}</div></div></section>
 ` : `<section class="hero${heroImg ? "" : " flat"}" id="accueil">${heroImg ? img(heroImg, d.name, "hero-img", false) : ""}<div class="hero-shade"></div>
 <div class="wrap hero-in">${kicker ? `<p class="hero-kicker rv">${e(kicker)}</p>` : ""}<h1 class="rv">${e(title)}</h1>${lead ? `<p class="hero-lead rv">${e(lead)}</p>` : ""}
 <div class="hero-cta rv"><a class="btn btn-sun" href="#contact">${e(cta)}</a>${gallery.length >= 3 ? `<a class="btn btn-light" href="#realisations">Voir nos réalisations</a>` : services.length ? `<a class="btn btn-light" href="#prestations">Nos prestations</a>` : ""}</div></div></section>
@@ -302,7 +319,7 @@ ${dark && highlights.length ? `<div class="hl"><div class="wrap"><div class="gri
   const servicesHtml = services.length ? `<section class="sec" id="prestations"><div class="wrap">
 <div class="head"><div><p class="eyebrow">Nos prestations</p>${H2(c?.servicesTitle || "Ce que nous faisons pour vous")}</div>${c?.servicesLead ? `<p>${e(c.servicesLead)}</p>` : ""}</div>
 ${servicesMode === "lignes" ? `<ol class="lines">${services.map((x, i) => `<li class="rv"><${x.link ? `a href="${e(x.link)}"` : "div"} class="ln"><span class="no">${String(i + 1).padStart(2, "0")}</span><div class="lt"><h3>${e(x.title)}</h3>${x.tag ? `<span class="tag">${e(x.tag)}</span>` : ""}</div><p>${e(x.text)}</p>${x.image ? img(x.image, x.title, "lpv") : ""}<span class="go">${icon("arrow", 20)}</span></${x.link ? "a" : "div"}></li>`).join("")}</ol>` : ""}
-<div class="svcs${servicesMode === "grandes" || services.length === 2 || services.length === 4 ? " big" : ""}"${servicesMode === "lignes" ? " hidden" : ""}>${services.map((x) => `<${x.link ? `a href="${e(x.link)}"` : "article"} class="svc rv">${x.image ? img(x.image, x.title, "svc-img") : '<div class="noimg"></div>'}${x.tag ? `<span class="tag">${e(x.tag)}</span>` : ""}<h3>${e(x.title)}</h3>${x.text ? `<p>${e(x.text)}</p>` : ""}${x.bullets.length ? `<ul>${x.bullets.map((b) => `<li>${e(b)}</li>`).join("")}</ul>` : ""}${x.link ? `<span class="more">En savoir plus ${icon("arrow", 15)}</span>` : ""}</${x.link ? "a" : "article"}>`).join("")}</div>
+<div class="svcs${servicesMode === "grandes" || services.length === 2 || services.length === 4 ? " big" : services.length === 5 ? " five" : ""}"${servicesMode === "lignes" ? " hidden" : ""}>${services.map((x) => `<${x.link ? `a href="${e(x.link)}"` : "article"} class="svc rv">${x.image ? img(x.image, x.title, "svc-img") : '<div class="noimg"></div>'}${x.tag ? `<span class="tag">${e(x.tag)}</span>` : ""}<h3>${e(x.title)}</h3>${x.text ? `<p>${e(x.text)}</p>` : ""}${x.bullets.length ? `<ul>${x.bullets.map((b) => `<li>${e(b)}</li>`).join("")}</ul>` : ""}${x.link ? `<span class="more">En savoir plus ${icon("arrow", 15)}</span>` : ""}</${x.link ? "a" : "article"}>`).join("")}</div>
 ${c?.extras.length ? `<div class="chips">${c.extras.map((x) => `<span>${e(x)}</span>`).join("")}</div>` : ""}
 </div></section>` : "";
 
