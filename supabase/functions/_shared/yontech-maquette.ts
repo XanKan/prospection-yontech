@@ -406,10 +406,13 @@ export function pickFacts(text: string) {
 }
 
 export function pickTheme(text: string): Theme {
+  // Le style qui compte le plus de mots du métier l'emporte (à égalité : chantier).
   const t = String(text || "").toLowerCase();
-  if (/menuis|[ée]b[ée]nist|\bbois\b|atelier|charpent|parquet|escalier|boulang|p[âa]tiss|fleur|tapiss|d[ée]cor|cuisine|agencement|ferronn|forge|vitrail|c[ée]ramique|poterie|restaurat/.test(t)) return "atelier";
-  if (/ma[çc]on|gros[- ]?[œo]e?uvre|terrassement|btp|construction|toiture|toit|[ée]tanch|couverture|couvreur|fa[çc]ade|d[ée]molition|vrd|travaux|[ée]lectric|plomb|chauff|clim|solaire|photovolta|pompe [àa] chaleur|serrur|fermeture|isolation|carrel|pl[âa]tr|peintur|b[ée]ton|enrob|assainiss|piscine/.test(t)) return "chantier";
-  return "moderne";
+  const count = (re: RegExp) => (t.match(re) || []).length;
+  const atelier = count(/menuis|[ée]b[ée]nist|\bbois\b|atelier|charpent|parquet|escalier|boulang|p[âa]tiss|fleur|tapiss|cuisine|agencement|ferronn|forge|vitrail|c[ée]ramique|poterie|restaurat|artisan d'art/g);
+  const chantier = count(/ma[çc]on|gros[- ]?[œo]e?uvre|terrassement|btp|construction|toiture|\btoit|[ée]tanch|couverture|couvreur|fa[çc]ade|bardage|ravalement|d[ée]molition|vrd|travaux|[ée]lectric|plomb|chauff|clim|solaire|photovolta|pompe [àa] chaleur|serrur|fermeture|isolation|carrel|pl[âa]tr|peintur|b[ée]ton|enrob|assainiss|piscine|maintenance immobili/g);
+  if (!atelier && !chantier) return "moderne";
+  return atelier > chantier ? "atelier" : "chantier";
 }
 
 /* ---------------- Assemblage ---------------- */
