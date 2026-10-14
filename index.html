@@ -1078,8 +1078,15 @@ async function api(action, payload){
   if (resp.status === 401){ showLogin("Session expirée, reconnectez-vous."); throw Object.assign(new Error("Session expirée"), { code: "session" }); }
   if (resp.status === 404) throw new Error("Le service d'automate n'est pas encore déployé sur le serveur.");
   if (!resp.ok) throw Object.assign(new Error(data.error || ("Erreur " + resp.status)), { code: data.code, data });
+  markTeam();
   return data;
 }
+// Ce navigateur appartient à l'équipe : ses visites des maquettes (*.yontech.fr) ne comptent pas.
+function markTeam(){
+  try { if (!/(?:^|;\s*)yt_equipe=1/.test(document.cookie)) document.cookie = "yt_equipe=1; domain=.yontech.fr; path=/; max-age=31536000; secure; samesite=lax"; } catch(e){}
+}
+// Liens vers une maquette ouverts depuis l'outil : marqués « aperçu », jamais comptés.
+const apercu = u => /yontech\.fr/.test(u || "") && !/[?&]apercu/.test(u) ? u + (u.includes("?") ? "&" : "?") + "apercu" : u;
 
 /* ============================================================
    NAVIGATION
@@ -1132,7 +1139,7 @@ function mqpSentLine(r){
     ['Ouvert', !!m.opened_at], ['Maquette vue', (r.views || 0) > 0], ['Clic', !!m.site_clicked_at], ['Réponse', !!m.replied_at]
   ].map(([l, on]) => '<span class="tagx' + (on ? " on" : "") + '">' + l + '</span>').join("");
   return '<li><div class="grow"><b>' + esc(r.company) + '</b><span>' + esc(m.email || "") + " · envoyé le " + dateFr(r.sent_at) + " à " + timeFr(r.sent_at) + (r.views ? " · " + r.views + " vue(s)" : "") + '</span></div>' + tags +
-    '<a class="b b-out b-xs" href="' + esc(r.url) + '" target="_blank" rel="noopener">Maquette ↗</a></li>';
+    '<a class="b b-out b-xs" href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">Maquette ↗</a></li>';
 }
 function renderMqp(){
   if (!MQP) return;
@@ -1156,9 +1163,9 @@ function renderMqp(){
   $("mqpList").innerHTML = pend.map(r => {
     const m = r.yontech_prospection_messages || {}, d = r.data || {};
     return '<div class="mqp-item" data-id="' + r.id + '">' +
-      '<a class="mqp-shot" href="' + esc(r.url) + '" target="_blank" rel="noopener" title="Ouvrir la maquette">' + (d.image ? '<img src="' + esc(d.image) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") + '<span style="background:' + esc(d.accent || "#444") + '">' + esc(d.tagline || r.company) + '</span></a>' +
+      '<a class="mqp-shot" href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener" title="Ouvrir la maquette">' + (d.image ? '<img src="' + esc(d.image) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") + '<span style="background:' + esc(d.accent || "#444") + '">' + esc(d.tagline || r.company) + '</span></a>' +
       '<div class="mqp-main"><div class="who">' + esc(m.company || r.company) + '</div>' +
-        '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + " · " + (1 + (d.pages || []).length) + ' page(s) · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
+        '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + " · " + (1 + (d.pages || []).length) + ' page(s) · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
         (d.quality && d.quality.warnings && d.quality.warnings.length ? '<div class="meta" style="color:#b96c14"><b>À vérifier :</b> ' + esc(d.quality.warnings.join(" · ")) + '</div>' : "") +
         '<input class="inp" data-f="subject" maxlength="200" value="' + esc(r.mail_subject || s.subject) + '" aria-label="Objet">' +
         '<details><summary>Modifier le texte du mail</summary><textarea class="inp" data-f="body" rows="12" maxlength="6000" style="margin-top:8px">' + esc(r.mail_body || s.body) + '</textarea></details>' +
@@ -1280,7 +1287,7 @@ function renderMaquettes(){
       '<div class="grow"><b>' + esc(m.company || m.slug) + '</b><span>' + esc(m.url.replace(/^https?:\/\//, "")) + " · " + (1 + ((m.data && m.data.pages) || []).length) + " page(s) · " + (m.views || 0) + " vue(s)" + (m.emailed_at ? " · mail test le " + dateFr(m.emailed_at) : "") + (m.status === "retire" ? " · retirée" : "") + '</span></div>' +
       '<span class="mq-sw" style="background:' + esc(m.data && m.data.accent || "#ccc") + '"></span>' +
       '<button type="button" class="b b-main b-xs" data-mq-view="' + m.id + '">Aperçu</button>' +
-      '<a class="b b-out b-xs" href="' + esc(m.url) + '" target="_blank" rel="noopener">Lien ↗</a>' +
+      '<a class="b b-out b-xs" href="' + esc(apercu(m.url)) + '" target="_blank" rel="noopener">Lien ↗</a>' +
       '<button type="button" class="b b-out b-xs" data-mq-status="' + m.id + '" data-to="' + (m.status === "retire" ? "en_ligne" : "retire") + '">' + (m.status === "retire" ? "Remettre" : "Retirer") + '</button>' +
       '<button type="button" class="b b-out b-xs" data-mq-del="' + m.id + '">Supprimer</button></li>';
   }).join("");
@@ -1291,9 +1298,9 @@ function mqShow(m){
   const d = m.data || {};
   $("mqPrev").hidden = false;
   $("mqPrevT").textContent = "Aperçu · " + (m.company || m.slug);
-  $("mqOpen").href = m.url;
+  $("mqOpen").href = apercu(m.url);
   const pgs = (d.pages || []);
-  $("mqPages").innerHTML = pgs.length ? "<b>Pages :</b> " + ['<a href="' + esc(m.url) + '" target="_blank" rel="noopener">Accueil</a>'].concat(pgs.map(p => '<a href="' + esc(/yontech\.fr$/.test(m.url) ? m.url + p.path : m.url) + '" target="_blank" rel="noopener">' + esc(p.label) + "</a>")).join(" · ") : "Une seule page (le site actuel n'a pas d'autres pages exploitables).";
+  $("mqPages").innerHTML = pgs.length ? "<b>Pages :</b> " + ['<a href="' + esc(apercu(m.url)) + '" target="_blank" rel="noopener">Accueil</a>'].concat(pgs.map(p => '<a href="' + esc(apercu(/yontech\.fr$/.test(m.url) ? m.url + p.path : m.url)) + '" target="_blank" rel="noopener">' + esc(p.label) + "</a>")).join(" · ") : "Une seule page (le site actuel n'a pas d'autres pages exploitables).";
   $("mqFrame").srcdoc = m.html || "";
   $("mqName").value = d.name || ""; $("mqTag").value = d.tagline || ""; $("mqEye").value = d.eyebrow || ""; $("mqIntro").value = d.intro || "";
   $("mqServ").value = (d.services || []).map(s => s.text ? s.title + " : " + s.text : s.title).join("\n");

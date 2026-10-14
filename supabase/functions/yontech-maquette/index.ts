@@ -28,7 +28,14 @@ Deno.serve(async (req) => {
     if (!pg?.html) return new Response("Page introuvable", { status: 404, headers: headers("text/plain; charset=utf-8") });
     data = { html: pg.html as string };
   }
+  // Visite comptée seulement hors aperçu (outil, équipe) et hors robots ;
+  // visiteur anonymisé (empreinte de l'adresse IP et du navigateur).
   const ua = req.headers.get("user-agent") || "";
-  if (url.searchParams.get("preview") !== "1" && ua && !BOT_RE.test(ua)) await db.rpc("yontech_maquette_view", { target_slug: slug });
+  if (url.searchParams.get("preview") !== "1" && ua && !BOT_RE.test(ua)) {
+    const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${ip}|${ua}`));
+    const visitor = [...new Uint8Array(digest)].slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("");
+    await db.rpc("yontech_maquette_view", { target_slug: slug, target_path: path, target_visitor: visitor });
+  }
   return new Response(data.html, { headers: headers() });
 });

@@ -39,7 +39,9 @@ export default {
     if (url.pathname === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
     const path = url.pathname === "/index.html" ? "/" : (url.pathname.replace(/\/+$/, "") || "/");
     if (!/^\/[a-z0-9-]{0,60}$/.test(path)) return Response.redirect(`https://${host}/`, 302);
-    const upstream = await fetch(`${ENDPOINT}?slug=${match[1]}&path=${encodeURIComponent(path)}`, {
+    // Visites de l'équipe Yontech (cookie posé par l'outil, ou lien « ?apercu ») : jamais comptées.
+    const team = /(?:^|;\s*)yt_equipe=1(?:;|$)/.test(request.headers.get("cookie") || "") || url.searchParams.has("apercu");
+    const upstream = await fetch(`${ENDPOINT}?slug=${match[1]}&path=${encodeURIComponent(path)}${team ? "&preview=1" : ""}`, {
       headers: { "user-agent": request.headers.get("user-agent") || "", "x-forwarded-for": request.headers.get("cf-connecting-ip") || "" },
     });
     const html = upstream.ok ? await upstream.text() : page("Page introuvable", "Cette proposition de site n'est pas, ou plus, en ligne.");
