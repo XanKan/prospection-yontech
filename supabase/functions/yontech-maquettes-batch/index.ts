@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { prepareMaquettes, releaseStale } from "../_shared/yontech-maquette-jobs.ts";
 
 // Préparation quotidienne de la prospection par maquette. Réveillée par
-// pg_cron toutes les 10 minutes (yontech-maquettes-batch) ; prépare au plus
+// pg_cron toutes les 5 minutes (yontech-maquettes-batch) ; prépare au plus
 // deux prospects par passage jusqu'au quota du jour. N'envoie rien.
 // Protégée par le secret de yontech_prospection_runtime.
 
@@ -17,8 +17,9 @@ Deno.serve(async (req) => {
   if (allowed !== true) return json({ error: "Accès refusé" }, 403);
   try {
     const released = await releaseStale(db);
-    // Deux maquettes par passage : chaque site compte jusqu'à neuf pages à lire.
-    const result = await prepareMaquettes(db, { max: 2, budgetMs: 100_000 });
+    // Une maquette par passage (toutes les 5 minutes) : lire jusqu'à neuf pages
+    // et quarante images d'un site occupe une exécution entière.
+    const result = await prepareMaquettes(db, { max: 1, budgetMs: 100_000 });
     return json({ ...result, released });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -2,8 +2,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { BRAND, composeEmail, normalizeTarget, targetKey, templateVars, unknownVariables } from "../_shared/yontech-core.ts";
 import { deliver, smtpConfigured, smtpHost, smtpPort } from "../_shared/yontech-mail.ts";
 import { knownFor, maybeSource } from "../_shared/yontech-jobs.ts";
-import { buildSite, maquetteMailBlock, renderAll, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
-import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareMaquettes, savePages, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
+import { buildSite, maquetteMailBlock, pickVariant, renderAll, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
+import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareMaquettes, releaseStale, savePages, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
 
 // Point d'entrée unique de l'outil prospection.yontech.fr. Réservé aux
 // comptes Supabase Auth dont l'adresse figure dans le secret
@@ -456,7 +456,9 @@ Deno.serve(async (req) => {
       return response(req, { ok: true });
     }
     if (action === "mqp.prepare") {
-      const result = await prepareMaquettes(db, { max: integer(payload.n ?? 3, 1, 5), budgetMs: 90_000, force: true });
+      // Un site par appel (limite de calcul d'une exécution) : l'outil enchaîne les appels.
+      await releaseStale(db);
+      const result = await prepareMaquettes(db, { max: 1, budgetMs: 110_000, force: true });
       return response(req, result);
     }
     // Prépare l'e-mail d'une maquette en attente (objet et texte éventuellement corrigés).
@@ -552,12 +554,12 @@ Deno.serve(async (req) => {
     }
     if (action === "maquette.generate") {
       let url = text(payload.url, 300), messageId: string | null = null;
-      let hints: { company?: string; metier?: string; ville?: string; email?: string } = {};
+      let hints: { company?: string; metier?: string; ville?: string; email?: string; cp?: string } = {};
       if (payload.message_id) {
         const m = check(await db.from("yontech_prospection_messages").select("id,company,email,data").eq("id", uuid(payload.message_id)).single()) as Rec;
         messageId = m.id;
         url = url || String(m.data?.site || "");
-        hints = { company: m.company, metier: m.data?.metier, ville: m.data?.ville, email: m.email };
+        hints = { company: m.company, metier: m.data?.metier, ville: m.data?.ville, cp: m.data?.cp, email: m.email };
       }
       if (!url) throw fail("Indiquez l'adresse du site à refaire.");
       const built = await buildSite(url, hints);
@@ -586,6 +588,8 @@ Deno.serve(async (req) => {
       for (const k of ["name", "tagline", "eyebrow", "intro", "phone", "email", "address", "city"] as const) if (k in v) data[k] = text(v[k], k === "intro" ? 400 : 160);
       if ("accent" in v && /^#[0-9a-f]{6}$/i.test(String(v.accent))) data.accent = String(v.accent).toLowerCase();
       if ("theme" in v && ["atelier", "chantier", "moderne"].includes(String(v.theme))) data.theme = String(v.theme) as SiteData["theme"];
+      // « Changer de style » : nouvelle combinaison de mise en page.
+      if (v.reroll === true) data.variant = pickVariant(crypto.randomUUID());
       if ("about" in v) data.about = text(v.about, 1600).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).slice(0, 3);
       if ("services" in v) data.services = text(v.services, 2000).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6).map((l) => { const [t, ...rest] = l.split(/\s*:\s*/); return { title: text(t, 70), text: text(rest.join(" : "), 240) }; });
       const all = renderAll(data);
@@ -643,6 +647,7 @@ Deno.serve(async (req) => {
     const e = error as { status?: number; message?: string };
     const status = Number(e.status) || 500;
     console.error("yontech-prospection-api", action, e.message || error);
-    return response(req, { error: status < 500 ? e.message : "Erreur serveur, réessayez dans un instant." }, status);
+    // Outil réservé à l'équipe : le détail technique accompagne l'erreur serveur pour le diagnostic.
+    return response(req, { error: status < 500 ? e.message : "Erreur serveur, réessayez dans un instant.", ...(status >= 500 ? { detail: String(e.message || error).slice(0, 300) } : {}) }, status);
   }
 });

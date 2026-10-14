@@ -676,7 +676,7 @@
                   <div class="fld"><label for="mqMail">E-mail</label><input class="inp" id="mqMail" maxlength="120"></div>
                 </div>
                 <div class="fld"><label for="mqAddr">Adresse</label><input class="inp" id="mqAddr" maxlength="160"></div>
-                <div class="run"><button type="submit" class="b b-main" id="bMqSave">Enregistrer les corrections</button><button type="button" class="b b-out" id="bMqRegen">Relire le site</button></div>
+                <div class="run"><button type="submit" class="b b-main" id="bMqSave">Enregistrer les corrections</button><button type="button" class="b b-out" id="bMqStyle">Changer de style</button><button type="button" class="b b-out" id="bMqRegen">Relire le site</button></div>
               </form>
               <div class="mq-send">
                 <h3>Mail de présentation (test)</h3>
@@ -1151,7 +1151,7 @@ function renderMqp(){
   $("mqpBanners").innerHTML = banners.join("");
   $("mqpKPending").textContent = st.pending;
   $("mqpKToday").innerHTML = st.preparedToday + ' <small>/ ' + s.daily + '</small>';
-  $("mqpKTodayF").textContent = s.enabled ? "préparation toutes les 10 min" : "préparation coupée";
+  $("mqpKTodayF").textContent = s.enabled ? "une maquette toutes les 5 min" : "préparation coupée";
   $("mqpKSent").textContent = st.sent;
   $("mqpKSentF").textContent = st.opened + " ouvert(s) · " + st.clicked + " clic(s)";
   $("mqpKViewed").textContent = st.viewed;
@@ -1242,14 +1242,22 @@ $("bMqpAll").addEventListener("click", async () => {
   busy($("bMqpAll"), false);
   await loadMqp().catch(() => {});
 });
+// Cinq maquettes, une par appel (chaque site demande une exécution serveur entière).
 $("bMqpPrep").addEventListener("click", async () => {
-  busy($("bMqpPrep"), true, "Préparation…");
+  const want = 5; let prepared = 0, failed = 0, tries = 0;
   try {
-    const r = await api("mqp.prepare", { n: 3 });
-    toast(r.prepared ? r.prepared + " maquette(s) préparée(s)." + (r.failed ? " " + r.failed + " site(s) écarté(s)." : "") : (r.errors && r.errors[0]) || "Aucun prospect « avec site » disponible pour l'instant.", 7000);
-    await loadMqp();
-  } catch(e){ toast(e.message || "Préparation impossible."); }
+    while (prepared < want && tries < want + 4){
+      tries++;
+      busy($("bMqpPrep"), true, "Préparation " + (prepared + 1) + "/" + want + "…");
+      const r = await api("mqp.prepare", {});
+      prepared += r.prepared || 0; failed += r.failed || 0;
+      if (!r.prepared && !r.failed) break;
+      await loadMqp().catch(() => {});
+    }
+    toast(prepared ? prepared + " maquette(s) préparée(s)." + (failed ? " " + failed + " site(s) écarté(s) par le contrôle qualité." : "") : "Aucun prospect « avec site » disponible pour l'instant.", 7000);
+  } catch(e){ toast((prepared ? prepared + " préparée(s), puis : " : "") + (e.message || "Préparation impossible."), 7000); }
   busy($("bMqpPrep"), false);
+  await loadMqp().catch(() => {});
 });
 $("mqpForm").addEventListener("submit", async ev => {
   ev.preventDefault();
@@ -1346,6 +1354,13 @@ $("mqEdit").addEventListener("submit", async ev => {
     await loadMaquettes();
   } catch(e){ toast(e.message || "Enregistrement impossible."); }
   busy($("bMqSave"), false);
+});
+$("bMqStyle").addEventListener("click", async () => {
+  if (!mqCurrent) return;
+  busy($("bMqStyle"), true, "Nouveau style…");
+  try { const { maquette } = await api("maquette.update", { id: mqCurrent.id, patch: { reroll: true } }); mqShow(maquette); toast("Nouveau style appliqué : la maquette en ligne est à jour."); }
+  catch(e){ toast(e.message || "Changement impossible."); }
+  busy($("bMqStyle"), false);
 });
 $("bMqRegen").addEventListener("click", () => {
   if (!mqCurrent) return;

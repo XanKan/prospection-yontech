@@ -67,7 +67,13 @@ function parisMidnightIso() {
 }
 
 // Prospects préparés il y a plus de 10 jours et jamais validés : rendus à l'automate classique.
+// Prospects réservés sans maquette (préparation interrompue) : rendus aussitôt.
 export async function releaseStale(db: SupabaseClient) {
+  const { data: reserved } = await db.from("yontech_prospection_messages").select("id").eq("status", "maquette").limit(200);
+  for (const r of reserved || []) {
+    const { data: has } = await db.from("yontech_maquettes").select("id").eq("message_id", r.id).limit(1).maybeSingle();
+    if (!has) await db.from("yontech_prospection_messages").update({ status: "queued" }).eq("id", r.id).eq("status", "maquette");
+  }
   const limit = new Date(Date.now() - 10 * 86_400_000).toISOString();
   const { data: stale } = await db.from("yontech_maquettes").select("id,message_id").eq("review", "a_valider").lt("prepared_at", limit).limit(50);
   for (const m of stale || []) {
@@ -84,7 +90,8 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
   if (!settings.maquette_enabled && !opts.force) return { state: "disabled" };
   const { count: today } = await db.from("yontech_maquettes").select("id", { count: "exact", head: true }).not("review", "is", null).gte("prepared_at", parisMidnightIso());
   let todo = Math.min(opts.max, Math.max(0, Number(settings.maquette_daily || 0) - (today || 0)));
-  if (opts.force) todo = Math.max(todo, Math.min(opts.max, 1));
+  // « Préparer maintenant » : le nombre demandé, même si le quota du jour est atteint.
+  if (opts.force) todo = opts.max;
   let prepared = 0, failed = 0;
   const errors: string[] = [];
   while (todo > 0 && Date.now() - started < opts.budgetMs) {
@@ -103,7 +110,7 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     if (!reserved) continue;
     const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", cand.email).maybeSingle();
     if (banned) { await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); continue; }
-    const built = await buildSite(String(cand.data.site), { company: cand.company, metier: cand.data?.metier, ville: cand.data?.ville, email: cand.email });
+    const built = await buildSite(String(cand.data.site), { company: cand.company, metier: cand.data?.metier, ville: cand.data?.ville, cp: cand.data?.cp, email: cand.email });
     if (!("error" in built) && built.data.quality && !built.data.quality.ok) {
       failed++; errors.push(`${cand.company} : écartée (${built.data.quality.blocking.join(", ")})`);
       await db.from("yontech_prospection_messages").update({ status: "queued", data: { ...(cand.data || {}), maquette_essai: ("écartée : " + built.data.quality.blocking.join(", ")).slice(0, 120) } }).eq("id", cand.id);
