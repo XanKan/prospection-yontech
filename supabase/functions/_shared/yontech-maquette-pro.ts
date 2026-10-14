@@ -81,6 +81,7 @@ export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number
   const line = `hsl(${h} ${Math.min(25, s)}% 88%)`;
   const F = FONTS[d.theme === "atelier" ? 2 : d.theme === "chantier" ? (opts.font % 2 ? 1 : 0) : (opts.font % 2 ? 3 : 0)];
   const tel = d.phone ? "tel:" + d.phone.replace(/\s/g, "") : "";
+  const cp0 = () => (d.address.match(/\b\d{5}\b/) || [])[0] || d.cp || "";
   const year = new Date().getFullYear();
   const initials = d.name.split(/\s+/).filter((w) => /[A-Za-zÀ-ÿ0-9]/.test(w)).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
@@ -91,22 +92,27 @@ export function renderPro(input: SiteData, opts: { hero: "a" | "b"; font: number
   const pages = (d.pages || []).slice(0, 7).map((pg) => ({ ...pg, image: px(pg.image), blocks: pg.blocks.map((b) => (b.t === "img" ? { ...b, v: px(b.v) } : b)) }));
   const kicker = c?.kicker || d.eyebrow || [d.city].filter(Boolean).join(" · ");
   const title = c?.title || words(d.tagline, 12);
-  const lead = c?.lead || short(d.intro, 230);
+  const firstSentence = (t2: string, n: number) => { const m = String(t2 || "").match(/^.{25,}?[.!?](\s|$)/); return short(m ? m[0].trim() : String(t2 || ""), n); };
+  const lead = c?.lead || firstSentence(d.intro, 200);
   const cta = c?.cta || "Demander un devis";
   const pageOf = (link?: string) => pages.find((pg) => pg.path === link);
-  const bulletsFrom = (link?: string) => (pageOf(link)?.blocks || []).filter((b) => b.t === "li" && b.v.length <= 90).slice(0, 3).map((b) => b.v);
+  // Puces sans IA : seulement des éléments de liste courts et propres (pas de « Titre : explication »).
+  const bulletsFrom = (link?: string) => (pageOf(link)?.blocks || []).filter((b) => b.t === "li" && b.v.length >= 4 && b.v.length <= 60 && !/[:;]/.test(b.v)).slice(0, 3).map((b) => b.v.replace(/[.,]$/, ""));
   const services = c?.services.length
     ? c.services.map((x) => { const src = x.source >= 0 ? d.services[x.source] : undefined; return { title: x.title, tag: x.tag, text: x.text, bullets: x.bullets, link: src?.link, image: px(src?.image) }; })
-    : d.services.slice(0, 6).map((x) => ({ title: x.title, tag: "", text: short(x.text, 160), bullets: bulletsFrom(x.link), link: x.link, image: px(x.image) }));
+    : d.services.slice(0, 6).map((x) => ({ title: x.title, tag: "", text: firstSentence(x.text, 130), bullets: bulletsFrom(x.link), link: x.link, image: px(x.image) }));
   const stats = c?.stats.length ? c.stats : (d.facts || []).slice(0, 4);
-  const highlights = c?.highlights.length ? c.highlights : [
-    d.city ? { title: d.city, text: d.address || "Votre entreprise de proximité." } : null,
-    d.hours[0] ? { title: "Horaires", text: d.hours.join(" · ") } : null,
-    d.phone ? { title: "Un interlocuteur", text: `Joignable au ${d.phone}.` } : null,
+  // Atouts : textes de l'IA, sinon uniquement des informations réelles et bien titrées.
+  const cleanAddr = (d.address || "").replace(/\s+(Facebook|Linked[Ii]n|Instagram|Twitter|YouTube|Youtube|TikTok|Google|Plan|Voir|Suivez)\b.*$/i, "");
+  const fallbackHl = [
+    cleanAddr || d.city ? { title: "Nous trouver", text: cleanAddr || [cp0(), d.city].filter(Boolean).join(" ") } : null,
+    d.hours[0] ? { title: "Horaires", text: d.hours.slice(0, 2).join(" · ") } : null,
+    d.phone ? { title: "Nous appeler", text: d.phone } : null,
   ].filter(Boolean) as { title: string; text: string }[];
+  const highlights = c?.highlights.length ? c.highlights : fallbackHl.length >= 2 ? fallbackHl : [];
   const steps = c?.steps.length === 4 ? c.steps : GENERIC_STEPS;
   const certs = (d.facts || []).filter((f) => /qualification|garantie/.test(f.label)).map((f) => f.value);
-  const aboutText = c?.aboutText || d.about[0] || "";
+  const aboutText = c?.aboutText || short(d.about[0] || "", 420);
   const points = c?.points.length ? c.points : (d.about[1] ? [{ title: "Notre approche", text: short(d.about[1], 200) }] : []);
   const bigValue = c?.bigValue || (d.facts || []).find((f) => /ans|salari|chantiers|clients|interventions/.test(f.label))?.value || "";
   const bigLabel = c?.bigLabel || (d.facts || []).find((f) => f.value === bigValue)?.label || "";

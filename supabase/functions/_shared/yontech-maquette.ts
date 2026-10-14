@@ -476,7 +476,7 @@ function pickAddress(text: string) {
   // Ville : mots en majuscule initiale (et liaisons « sur », « en », « de »…) après le code postal.
   const cm = address.match(/\b(\d{5})\s+((?:[A-ZÀ-Ý][A-Za-zÀ-ÿ'’-]*)(?:[\s-]+(?:(?:sur|sous|en|de|du|des|la|le|les|lès|lez|aux|au|et|d'|l')[\s-]+)*[A-ZÀ-Ý][A-Za-zÀ-ÿ'’-]*)*)/);
   // La ville s'arrête avant les mots d'interface collés à l'adresse (« Appelez-nous », « Tél »…).
-  const city = cm ? cm[2].split(/\s+(?=(?:Appelez|Appeler|T[ée]l|Tel|Phone|Contact|Contactez|Horaires?|Ouvert|Du|Lundi|E-?mail|Mail|Nous|Suivez|Devis|Accueil|France|Fax|Mob|Port|SIRET|Siret|RCS)\b)/)[0] : "";
+  const city = cm ? cm[2].split(/\s+(?=(?:Appelez|Appeler|T[ée]l|Tel|Phone|Contact|Contactez|Horaires?|Ouvert|Du|Lundi|E-?mail|Mail|Nous|Suivez|Devis|Accueil|France|Fax|Mob|Port|SIRET|Siret|RCS|Facebook|Linked[Ii]n|Instagram|Insta|Twitter|X|Youtube|YouTube|TikTok|Pinterest|Google|Plan|Itin[ée]raire|Voir|Mentions|Copyright|Tous|©)\b)/)[0] : "";
   const trimmed = cm ? address.slice(0, address.indexOf(cm[0])) + cm[1] + " " + city : address;
   return { address: trimmed, city: titleCase(city) };
 }
