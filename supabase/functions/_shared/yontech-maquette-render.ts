@@ -1,4 +1,5 @@
 import { htmlEscape } from "./yontech-core.ts";
+import { renderPro } from "./yontech-maquette-pro.ts";
 import type { Block, PageModel, SiteData, Theme } from "./yontech-maquette.ts";
 
 // Rendu des maquettes de refonte. Chaque maquette tire une combinaison de
@@ -115,8 +116,14 @@ export function renderSite(input: SiteData) {
 }
 
 export function renderAll(input: SiteData): { home: string; pages: { path: string; html: string }[] } {
+  // Gabarit « pro » (calqué sur les maquettes faites à la main) pour toutes les maquettes :
+  // deux accroches (claire avec chiffres, sombre avec atouts) et plusieurs polices selon le tirage.
+  {
+    const V0: Variant = input.variant || pickVariant(input.host || input.name);
+    return renderPro(input, { hero: V0.header === "dark" || V0.hero === "card" ? "b" : "a", font: V0.font });
+  }
   const e = htmlEscape;
-  const theme: Theme = input.theme && FONTS[input.theme] ? input.theme : "moderne";
+  const theme: Theme = input.theme && FONTS[input.theme as Theme] ? input.theme as Theme : "moderne";
   const V: Variant = input.variant || pickVariant(input.host || input.name);
   // Mise en page : studio (éditorial), nuit (immersif sombre), bento (tuiles), classique.
   const layout: Layout = V.layout || LAYOUTS[Math.floor(seeded("mise-en-page:" + (input.host || input.name))() * LAYOUTS.length)];

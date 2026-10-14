@@ -3,6 +3,7 @@
 import { parseHTML } from "npm:linkedom@0.18.5";
 import { extractEmails, htmlEscape, niceCompany, type Tracking, trackedUrl } from "./yontech-core.ts";
 import { inkOf as renderInk, pickVariant, px, renderAll, type Variant } from "./yontech-maquette-render.ts";
+import { type Copy, rewriteCopy } from "./yontech-maquette-ai.ts";
 
 // Générateur de maquettes de refonte (campagne « sites », prospects qui ont
 // déjà un site). Il lit le site actuel de l'entreprise (accueil, puis une page
@@ -32,6 +33,8 @@ export type SiteData = {
   pages?: PageModel[];
   // Images réparties une seule fois chacune, code postal (carte), variante de mise en page.
   heroImage?: string; aboutImage?: string; gallery?: string[]; bandImage?: string; cp?: string; variant?: Variant;
+  // Textes rédigés par l'IA à partir du site (facultatif).
+  copy?: Copy | null;
 };
 export type Theme = "atelier" | "chantier" | "moderne";
 export const THEMES: Record<Theme, string> = { atelier: "Atelier (artisanat, bois, chaleureux)", chantier: "Chantier (BTP, énergique)", moderne: "Moderne (sobre, polyvalent)" };
@@ -836,6 +839,16 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
     pages, heroImage, aboutImage, gallery: gallery.length >= 3 ? gallery : [], bandImage, cp, variant: pickVariant(ownDomain + name),
   };
   data.quality = assessQuality(data, hints.company || "");
+  // Rédaction par IA (si la clé est configurée et la maquette retenue) : textes courts et structurés.
+  const aiKey = Deno.env.get("YONTECH_ANTHROPIC_API_KEY") || "";
+  if (aiKey && data.quality.ok) {
+    const fileName = (u: string) => decodeURIComponent(u.split("?")[0].split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 80);
+    data.copy = await rewriteCopy(aiKey, data, {
+      paragraphs: allParagraphs,
+      pages: pages.map((pg) => ({ label: pg.label, blocks: pg.blocks })),
+      imageNames: (data.gallery || []).map(fileName),
+    });
+  }
   const all = renderAll(data);
   return { data, html: all.home, pages: all.pages };
 }
