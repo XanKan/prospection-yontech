@@ -4,7 +4,7 @@
 // non proxifié (prospection, www…) ne passent jamais par ici ; par prudence,
 // les noms réservés sont renvoyés tels quels vers leur origine.
 const ENDPOINT = "https://sdygujqnpsbnmmkjdjfz.supabase.co/functions/v1/yontech-maquette";
-const RESERVED = new Set(["www", "prospection", "mail", "webmail", "smtp", "imap", "pop", "ftp", "autodiscover", "autoconfig", "api", "app", "admin", "go", "cdn", "static"]);
+const RESERVED = new Set(["www", "prospection", "mail", "webmail", "smtp", "imap", "pop", "ftp", "autodiscover", "autoconfig", "api", "app", "admin", "go", "cdn", "static", "maquette", "maquettes", "sebalyo"]);
 
 const page = (title, text) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${title}</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui,sans-serif;color:#14161c;background:#f5f6f9;text-align:center;padding:24px}a{color:#4F46E5;font-weight:700}</style></head><body><div><h1 style="font-size:22px">${title}</h1><p>${text}</p><p><a href="https://yontech.fr">yontech.fr</a></p></div></body></html>`;
 

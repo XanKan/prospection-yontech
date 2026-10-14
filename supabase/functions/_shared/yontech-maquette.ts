@@ -528,7 +528,7 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
 /* ---------------- Rendu ---------------- */
 
 const SLUG_STOP = /\b(sarl|sas|sasu|eurl|sa|snc|sci|scop|ei|eirl|selarl|ets|etablissements?|entreprise|societe|soci[ée]t[ée]|groupe|the|le|la|les|l|et|de|du|des)\b/g;
-export const RESERVED_SLUGS = new Set(["www", "prospection", "mail", "webmail", "smtp", "imap", "pop", "ftp", "autodiscover", "autoconfig", "api", "app", "admin", "go", "cdn", "static", "dev", "test", "staging", "blog", "shop", "support", "aide", "contact", "yontech", "piloz", "netozia", "querax", "verif-maquette"]);
+export const RESERVED_SLUGS = new Set(["www", "prospection", "mail", "webmail", "smtp", "imap", "pop", "ftp", "autodiscover", "autoconfig", "api", "app", "admin", "go", "cdn", "static", "dev", "test", "staging", "blog", "shop", "support", "aide", "contact", "yontech", "piloz", "netozia", "querax", "verif-maquette", "maquette", "maquettes", "sebalyo"]);
 export function slugify(name: string) {
   const base = String(name || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " et ").replace(/['’]/g, " ")
     .replace(SLUG_STOP, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/g, "");
