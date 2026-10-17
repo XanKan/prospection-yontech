@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { prepareCreations, prepareMaquettes, releaseStale } from "../_shared/yontech-maquette-jobs.ts";
 import { sendViewFollowups } from "../_shared/yontech-maquette-followup.ts";
+import { autoSendMaquettes } from "../_shared/yontech-maquette-autosend.ts";
 import { refreshStale } from "../_shared/yontech-maquette-refresh.ts";
 import { collectDesigns, submitDesigns } from "../_shared/yontech-maquette-design.ts";
 
@@ -27,12 +28,14 @@ Deno.serve(async (req) => {
     const designing = await submitDesigns(db, 12).catch((e) => ({ error: (e as Error).message }));
     // Relances automatiques après la première visite d'une maquette.
     const viewFollowups = await sendViewFollowups(db, 3).catch((e) => ({ error: (e as Error).message }));
+    // Envoi automatique des maquettes prêtes (réglage « Envoi automatique »).
+    const autoSent = await autoSendMaquettes(db, 3).catch((e) => ({ error: (e as Error).message }));
     // Maquettes « création » (sans site) : aucune lecture de site, plusieurs par passage.
     const creations = await prepareCreations(db, { max: 4 }).catch((e) => ({ error: (e as Error).message }));
     // Une maquette par passage (toutes les 5 minutes) : lire jusqu'à neuf pages
     // et quarante images d'un site occupe une exécution entière.
     const result = await prepareMaquettes(db, { max: 1, budgetMs: 100_000 });
-    return json({ ...result, released, redrawn, designed, designing, viewFollowups, creations });
+    return json({ ...result, released, redrawn, designed, designing, viewFollowups, autoSent, creations });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[Yontech Maquettes] Erreur", message);

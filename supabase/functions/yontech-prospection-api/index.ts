@@ -73,7 +73,7 @@ async function maquetteTemplate(db: any) {
 }
 // deno-lint-ignore no-explicit-any
 type Rec = Record<string, any>;
-const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id,design_status,design_error,kind";
+const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id,design_status,design_error,kind,design_at";
 
 function adminAllowed(address: string) {
   const list = (Deno.env.get("YONTECH_ADMIN_EMAILS") || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -423,7 +423,7 @@ Deno.serve(async (req) => {
     if (action === "mqp.state") {
       const ready = await maquetteDomainReady();
       const [settings, pending, sent] = await Promise.all([
-        db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_daily_creation,maquette_subject,maquette_body").eq("id", 1).single(),
+        db.from("yontech_prospection_settings").select("maquette_enabled,maquette_auto,maquette_daily,maquette_daily_creation,maquette_subject,maquette_body").eq("id", 1).single(),
         db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data,status,opened_at,sent_at)").eq("review", "a_valider").order("prepared_at").limit(100),
         db.from("yontech_maquettes").select("id,slug,company,views,last_view_at,sent_at,prepared_at,review,data,kind,view_followup_at,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)").in("review", ["envoye"]).order("sent_at", { ascending: false }).limit(100),
       ]);
@@ -438,7 +438,7 @@ Deno.serve(async (req) => {
       const preparedTodayCreation = todayRows.filter((r) => r.kind === "creation").length;
       return response(req, {
         domainReady: ready,
-        settings: { enabled: s.maquette_enabled, daily: s.maquette_daily, dailyCreation: s.maquette_daily_creation, ...(await (async () => { const t = await maquetteTemplate(db); return { subject: t.subject, body: t.body, templates: ((await db.from("yontech_prospection_templates").select("id,name,active,kind").in("kind", ["maquette", "maquette_creation"])).data || []) }; })()) },
+        settings: { enabled: s.maquette_enabled, auto: s.maquette_auto, daily: s.maquette_daily, dailyCreation: s.maquette_daily_creation, ...(await (async () => { const t = await maquetteTemplate(db); return { subject: t.subject, body: t.body, templates: ((await db.from("yontech_prospection_templates").select("id,name,active,kind").in("kind", ["maquette", "maquette_creation"])).data || []) }; })()) },
         pending: ((pending.data || []) as Rec[]).map(slim),
         sent: sentRows.map(slim),
         stats: {
@@ -453,6 +453,7 @@ Deno.serve(async (req) => {
     if (action === "mqp.settings") {
       const patch: Rec = { updated_at: new Date().toISOString() };
       if ("enabled" in payload) patch.maquette_enabled = payload.enabled === true;
+      if ("auto" in payload) patch.maquette_auto = payload.auto === true;
       if ("daily" in payload) patch.maquette_daily = integer(payload.daily, 0, 100);
       if ("dailyCreation" in payload) patch.maquette_daily_creation = integer(payload.dailyCreation, 0, 200);
       if ("subject" in payload) patch.maquette_subject = text(payload.subject, 200) || null;

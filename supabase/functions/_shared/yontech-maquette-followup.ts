@@ -19,7 +19,7 @@ Un simple « ok » en réponse suffit : nous vous appelons pour l'ajuster avec v
 
 Bien cordialement,`;
 
-function inSendingHours(s: Record<string, unknown>) {
+export function inSendingHours(s: Record<string, unknown>) {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value || "";

@@ -59,7 +59,7 @@ export async function uniqueSlug(db: SupabaseClient, wanted: string) {
   return `${wanted.slice(0, 40)}-${crypto.randomUUID().slice(0, 6)}`;
 }
 
-function parisMidnightIso() {
+export function parisMidnightIso() {
   const now = new Date();
   const day = new Intl.DateTimeFormat("fr-CA", { timeZone: "Europe/Paris" }).format(now);
   const offset = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Paris", timeZoneName: "shortOffset" }).formatToParts(now).find((p) => p.type === "timeZoneName")?.value || "GMT+1";

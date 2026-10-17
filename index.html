@@ -621,7 +621,7 @@
 
         <form class="card" id="mqpForm">
           <div class="card-h"><h2>Réglages</h2>
-            <div class="right"><label class="swi"><input type="checkbox" id="mqpOn"><i></i> Préparation automatique</label></div>
+            <div class="right" style="display:flex;gap:16px;flex-wrap:wrap"><label class="swi"><input type="checkbox" id="mqpOn"><i></i> Préparation automatique</label><label class="swi" title="Les maquettes prêtes partent seules deux heures après, pendant les créneaux d'envoi"><input type="checkbox" id="mqpAuto"><i></i> Envoi automatique</label></div>
           </div>
           <div class="card-b">
             <div class="fields">
@@ -1150,7 +1150,11 @@ function mqpSentLine(r){
 function designBusy(r){ return r.design_status === "attente" || r.design_status === "en_cours"; }
 function designLine(r){
   if (designBusy(r)) return '<div class="meta" style="color:#b96c14"><b>Site sur mesure en cours de création</b> par l\'IA (quelques minutes à une heure). La version actuelle est provisoire.</div>';
-  if (r.design_status === "ok") return '<div class="meta" style="color:var(--ok)"><b>Site sur mesure</b> dessiné par l\'IA.</div>';
+  if (r.design_status === "ok") {
+    const auto = MQP && MQP.settings && MQP.settings.auto && r.design_at;
+    const at = auto ? new Date(new Date(r.design_at).getTime() + 2 * 3600e3) : null;
+    return '<div class="meta" style="color:var(--ok)"><b>Site sur mesure</b> dessiné par l\'IA.' + (at ? ' Part automatiquement ' + (at > new Date() ? "à partir de " + timeFr(at.toISOString()) : "au prochain créneau d'envoi") + ' (supprimez-la avant si besoin).' : "") + '</div>';
+  }
   if (r.design_status === "echec") return '<div class="meta" style="color:#b96c14"><b>Site sur mesure non obtenu</b>' + (r.design_error ? " (" + esc(r.design_error) + ")" : "") + ' : version gabarit conservée.</div>';
   return "";
 }
@@ -1203,7 +1207,7 @@ function renderMqp(){
   const tpls = s.templates || [];
   $("mqpTplNote").innerHTML = tpls.length ? "Texte du mail : modèle(s) de type « Prospection maquette » de l'écran Messages — " + tpls.map(t => "<b>" + esc(t.name) + "</b>" + (t.active ? "" : " (inactif)")).join(", ") + ". Plusieurs modèles actifs sont tirés au hasard. Un nouveau texte s'applique aux prochains mails préparés ; ceux en attente restent modifiables un par un ci-dessus." : "Aucun modèle « Prospection maquette » : le texte par défaut est utilisé. Créez-en un dans Messages pour le personnaliser.";
   if (document.activeElement !== $("mqpDaily")){
-    $("mqpOn").checked = !!s.enabled; $("mqpDaily").value = s.daily; $("mqpDailyC").value = s.dailyCreation ?? 20;
+    $("mqpOn").checked = !!s.enabled; $("mqpAuto").checked = !!s.auto; $("mqpDaily").value = s.daily; $("mqpDailyC").value = s.dailyCreation ?? 20;
   }
 }
 const mqpFields = item => ({ subject: item.querySelector('[data-f="subject"]').value, body: item.querySelector('[data-f="body"]').value });
@@ -1287,7 +1291,7 @@ $("mqpForm").addEventListener("submit", async ev => {
   ev.preventDefault();
   busy($("bMqpSave"), true);
   try {
-    await api("mqp.settings", { enabled: $("mqpOn").checked, daily: Number($("mqpDaily").value), dailyCreation: Number($("mqpDailyC").value) });
+    await api("mqp.settings", { enabled: $("mqpOn").checked, auto: $("mqpAuto").checked, daily: Number($("mqpDaily").value), dailyCreation: Number($("mqpDailyC").value) });
     toast("Réglages enregistrés."); await loadMqp();
   } catch(e){ toast(e.message || "Enregistrement impossible."); }
   busy($("bMqpSave"), false);
