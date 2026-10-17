@@ -35,6 +35,8 @@ export type SiteData = {
   heroImage?: string; aboutImage?: string; gallery?: string[]; bandImage?: string; cp?: string; variant?: Variant;
   // Textes rédigés par l'IA à partir du site (facultatif).
   copy?: Copy | null;
+  // Année de création estimée du site actuel (refonte seulement pour les sites d'avant 2024).
+  siteYear?: number | null; siteYearHow?: string;
 };
 export type Theme = "atelier" | "chantier" | "moderne";
 export const THEMES: Record<Theme, string> = { atelier: "Atelier (artisanat, bois, chaleureux)", chantier: "Chantier (BTP, énergique)", moderne: "Moderne (sobre, polyvalent)" };
@@ -859,6 +861,8 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
     facts: pickFacts(textAll), theme: pickTheme([name, tagline, intro, ...services.map((x) => x.title), hints.metier || ""].join(" ")),
     pages, heroImage, aboutImage, gallery: gallery.length >= 3 ? gallery : [], bandImage, cp, variant: pickVariant(ownDomain + name),
   };
+  const created = siteCreationYear([home.html, ...extras.map((x) => x.html)], images);
+  data.siteYear = created?.year ?? null; data.siteYearHow = created?.how || "";
   data.quality = assessQuality(data, hints.company || "");
   // Rédaction par IA (si la clé est configurée et la maquette retenue) : textes courts et structurés.
   const aiKey = Deno.env.get("YONTECH_ANTHROPIC_API_KEY") || "";
@@ -916,8 +920,28 @@ export function maquetteMailBlock(d: SiteData, url: string) {
 // Contrôle qualité d'une maquette avant de la proposer : les défauts
 // bloquants l'écartent d'office, les autres sont signalés à la validation.
 const NOT_A_COMPANY_RE = /\b(ordre (des|national)|chambre (de|des|r[ée]gionale|d[ée]partementale)|syndicat|f[ée]d[ée]ration|conf[ée]d[ée]ration|union (nationale|r[ée]gionale|d[ée]partementale)|conseil (national|r[ée]gional|d[ée]partemental)|association|fondation|minist[eè]re|mairie|commune de|communaut[ée] (de communes|d'agglom)|d[ée]partement d[eu]|r[ée]gion |pr[ée]fecture|universit[ée]|lyc[ée]e|coll[eè]ge|[ée]cole|ccas|cci|cma|urssaf|p[ôo]le emploi|france travail|non-diffusible)\b/i;
+// Année de création estimée d'un site : la plus ancienne date des dossiers
+// d'images (/uploads/AAAA/MM/, WordPress et autres), sinon l'année de départ
+// du copyright (« © 2019 – 2026 »), ou une année seule si elle n'est pas
+// l'année en cours (souvent affichée automatiquement, donc pas une preuve).
+export const RECENT_SITE_YEAR = 2024;
+export function siteCreationYear(htmls: string[], urls: string[], now = new Date()): { year: number; how: string } | null {
+  const cur = now.getFullYear();
+  const blob = htmls.join(" ") + " " + urls.join(" ");
+  const uploads = [...blob.matchAll(/\/uploads\/((?:19|20)\d{2})\/(?:0[1-9]|1[0-2])\//g)].map((m) => Number(m[1])).filter((y) => y >= 2005 && y <= cur);
+  if (uploads.length >= 2) return { year: Math.min(...uploads), how: "dates des images" };
+  for (const m of blob.matchAll(/(?:©|&copy;|&#169;|copyright)\s*((?:19|20)\d{2})\s*(?:[-–]\s*((?:19|20)\d{2}))?/gi)) {
+    const start = Number(m[1]);
+    if (start < 1995 || start > cur) continue;
+    if (m[2] || start < cur) return { year: start, how: "copyright" };
+  }
+  return null;
+}
+
 export function assessQuality(d: SiteData, company = "") {
   const blocking: string[] = [], warnings: string[] = [];
+  // Site créé récemment : pas de refonte proposée (l'entreprise vient d'investir).
+  if (d.siteYear && d.siteYear >= RECENT_SITE_YEAR) blocking.push(`site récent (créé en ${d.siteYear}, d'après les ${d.siteYearHow || "indices du site"})`);
   if (NOT_A_COMPANY_RE.test(`${company} ${d.name}`)) blocking.push("organisme, pas une entreprise à démarcher");
   if (!d.images.length) blocking.push("aucune photo exploitable");
   if (!d.phone && !d.email) blocking.push("ni téléphone ni e-mail sur le site");
