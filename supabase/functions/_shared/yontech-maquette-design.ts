@@ -164,12 +164,16 @@ export function finalizeHtml(raw: string, d: SiteData, allowed: string[]): { htm
   html = html.replace(/<source\b[^>]*>/gi, "");
   // Formulaires : jamais envoyés.
   html = html.replace(/<form\b([^>]*)>/gi, (_m, a) => `<form${String(a).replace(/\s(action|method|target)\s*=\s*("[^"]*"|'[^']*'|\S+)/gi, "")} onsubmit="event.preventDefault();alert('Formulaire de démonstration : cette maquette n\\'envoie rien.')">`);
-  // Coordonnées : seules les vraies.
+  // Coordonnées : seules les vraies. Remplacement dans le texte visible
+  // uniquement (jamais dans une adresse d'image ou un attribut : un nom de
+  // fichier contenant une suite de chiffres ressemble à un numéro).
   const realPhone = digits(d.phone || "");
-  html = html.replace(/href="tel:([^"]*)"/gi, (m, n) => (realPhone && digits(n) === realPhone ? m : realPhone ? `href="tel:${realPhone}"` : 'href="#contact"'));
-  html = html.replace(PHONE_RE, (m) => (digits(m) === realPhone ? m : d.phone || ""));
   const realEmail = (d.email || "").toLowerCase();
-  html = html.replace(EMAIL_RE, (m) => (m.toLowerCase() === realEmail || /yontech|googleapis|gstatic/i.test(m) ? m : d.email || ""));
+  html = html.replace(/href="tel:([^"]*)"/gi, (m, n) => (realPhone && digits(n) === realPhone ? m : realPhone ? `href="tel:${realPhone}"` : 'href="#contact"'));
+  html = html.replace(/href="mailto:([^"?]*)/gi, (m, e) => (realEmail && e.toLowerCase() === realEmail ? m : realEmail ? `href="mailto:${d.email}` : 'href="#contact'));
+  html = html.replace(/(<(script|style)\b[\s\S]*?<\/\2>)|>([^<]+)</gi, (m, block, _tag, text) => block ? block : ">" + String(text)
+    .replace(PHONE_RE, (p: string) => (digits(p) === realPhone ? p : d.phone || ""))
+    .replace(EMAIL_RE, (x: string) => (x.toLowerCase() === realEmail ? x : d.email || "")) + "<");
   // Bandeau Yontech, non indexation, repère de version.
   const direction = ((html.match(/<meta\s+name="yt-direction"\s+content="([^"]*)"/i) || [])[1] || "").slice(0, 80);
   html = html.replace(/<head([^>]*)>/i, `<head$1><meta name="robots" content="noindex,nofollow"><meta name="yt-design" content="ia">`);
