@@ -187,15 +187,15 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
 export const CREATION_SUBJECT = "{entreprise} : nous avons créé votre site internet";
 export const CREATION_BODY = `{bonjour},
 
-Quand un client cherche {entreprise} sur internet, il ne trouve aujourd'hui aucun site. Nous avons donc pris les devants et créé le vôtre :
+Quand un client cherche {entreprise} sur internet, il ne trouve aujourd'hui aucun site. Nous avons donc pris les devants et préparé une première ébauche du vôtre :
 
 {maquette}
 
-Les textes sont une première proposition, à ajuster avec vous. Le site s'affiche parfaitement sur téléphone et met en avant votre numéro et la demande de devis.
+Ce n'est qu'un point de départ : nous l'adaptons ensuite à votre image. Les couleurs s'accordent à votre identité, et si vous avez un logo, envoyez-le-nous. Même chose pour vos photos de chantiers et vos textes : une simple réponse à ce mail suffit, nous nous occupons du reste.
 
 La création est offerte : vous ne payez que 39 € par mois (hébergement, nom de domaine et mises à jour compris), sans engagement.
 
-Répondez simplement « ok » et nous le mettons en ligne avec vos corrections.
+Répondez simplement « ok » et nous mettons votre site en ligne avec vos éléments.
 
 Bien cordialement,`;
 
