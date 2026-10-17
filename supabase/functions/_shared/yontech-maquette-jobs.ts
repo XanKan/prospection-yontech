@@ -111,7 +111,8 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
         .eq("status", "sent").eq("data->>campagne", "site").is("data->>maquette_essai", null)
         .not("opened_at", "is", null).is("scanner_at", null).is("replied_at", null)
         .lt("sent_at", new Date(Date.now() - 24 * 3_600_000).toISOString())
-        .order("opened_at", { ascending: false }).limit(20);
+        .not("data->>site", "is", null).neq("data->>site", "").or("data->>sanssite.is.null,data->>sanssite.neq.true")
+        .order("opened_at", { ascending: false }).limit(50);
       const list = (openers || []).filter((c) => c.data?.site && String(c.data?.sanssite) !== "true");
       const { data: taken } = list.length ? await db.from("yontech_maquettes").select("message_id").in("message_id", list.map((c) => c.id)) : { data: [] };
       const has = new Set((taken || []).map((x) => x.message_id));
@@ -125,7 +126,8 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
         .eq("status", "sent").eq("data->>campagne", "site").is("data->>maquette_essai", null)
         .is("opened_at", null).is("replied_at", null)
         .lt("sent_at", new Date(Date.now() - 24 * 3_600_000).toISOString())
-        .order("score", { ascending: false, nullsFirst: false }).order("sent_at", { ascending: false }).limit(20);
+        .not("data->>site", "is", null).neq("data->>site", "").or("data->>sanssite.is.null,data->>sanssite.neq.true")
+        .order("score", { ascending: false, nullsFirst: false }).order("sent_at", { ascending: false }).limit(50);
       const list = (quiet || []).filter((c) => c.data?.site && String(c.data?.sanssite) !== "true");
       const { data: taken } = list.length ? await db.from("yontech_maquettes").select("message_id").in("message_id", list.map((c) => c.id)) : { data: [] };
       const has = new Set((taken || []).map((x) => x.message_id));
