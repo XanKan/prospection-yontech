@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { buildSite, RESERVED_SLUGS, slugify } from "./yontech-maquette.ts";
 import { creationData } from "./yontech-maquette-creation.ts";
+import { checkAddress } from "./yontech-mail.ts";
 
 // Prospection par maquette : chaque jour, l'outil prépare un nombre fixe de
 // prospects de la campagne « sites » qui ont déjà un site (20 par défaut) :
@@ -146,6 +147,9 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     };
     const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", cand.email).maybeSingle();
     if (banned) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); else await release("adresse exclue"); continue; }
+    // Adresse inutilisable : pas de maquette (ni lecture du site, ni site sur mesure à payer).
+    const addr = await checkAddress(cand.email);
+    if (!addr.ok) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "skipped", error: `Adresse écartée : ${addr.reason}`, data: { ...(cand.data || {}), maquette_essai: "adresse invalide" } }).eq("id", cand.id); else await release("adresse invalide"); continue; }
     attempts++;
     // Marqué « essayé » avant la lecture : un site qui fait échouer l'exécution ne revient jamais en tête de file.
     await db.from("yontech_prospection_messages").update({ data: { ...(cand.data || {}), maquette_essai: "en cours" } }).eq("id", cand.id);
@@ -232,6 +236,8 @@ export async function prepareCreations(db: SupabaseClient, opts: { max: number }
     await db.from("yontech_prospection_messages").update({ data: { ...(cand.data || {}), maquette_essai: "création" } }).eq("id", cand.id);
     const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", cand.email).maybeSingle();
     if (banned) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); continue; }
+    const addr = await checkAddress(cand.email);
+    if (!addr.ok) { await db.from("yontech_prospection_messages").update({ ...(fromQueue ? { status: "skipped", error: `Adresse écartée : ${addr.reason}` } : {}), data: { ...(cand.data || {}), maquette_essai: "adresse invalide" } }).eq("id", cand.id); continue; }
     const data = creationData(cand as { company: string; email: string; data: Record<string, unknown> });
     const slug = await uniqueSlug(db, slugify(data.name));
     const { data: tpls } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("kind", "maquette_creation").eq("active", true);

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { pickTemplates, templateVars } from "./yontech-core.ts";
-import { alertAdmin, deliver, type MailTemplate, type SenderSettings } from "./yontech-mail.ts";
+import { alertAdmin, checkAddress, deliver, type MailTemplate, type SenderSettings } from "./yontech-mail.ts";
 import { runSourcing } from "./yontech-sourcing.ts";
 
 // Tâches de l'automate Yontech, partagées entre yontech-prospection-sender
@@ -127,6 +127,10 @@ export async function maybeSource(db: SupabaseClient, force = false, budgetMs = 
     progress: async (c) => { await db.from("yontech_prospection_settings").update({ sourcing_cursor: c }).eq("id", 1); },
     known: (sirens, emails) => knownFor(db, sirens, emails),
     enqueue: async (items) => {
+      // Adresses inutilisables (mal formées, techniques, jetables, domaine mort) : jamais mises en file.
+      const checked = await Promise.all(items.map(async (it) => ((await checkAddress(String((it as { email?: string }).email || ""))).ok ? it : null)));
+      items = checked.filter(Boolean) as typeof items;
+      if (!items.length) return 0;
       const { data, error: enqueueError } = await db.rpc("yontech_prospection_enqueue", { items, target_origin: "autopilote" });
       if (enqueueError) throw enqueueError;
       return Number(data?.added || 0);

@@ -102,40 +102,53 @@ export async function resolveVideoThumb(videoUrl: string): Promise<string> {
   return url;
 }
 
-// Vérification de l'adresse avant l'envoi : un domaine qui n'existe pas ou ne
-// reçoit pas de courrier (ni MX ni adresse IP) ferait un rebond, qui abîme la
-// réputation de la boîte. En cas de doute (DNS lent, erreur), on envoie.
+// Vérification de l'adresse avant l'envoi (et avant la mise en file ou la
+// préparation d'une maquette) : syntaxe, adresses techniques (noreply…),
+// domaines jetables, fautes de frappe courantes, puis domaine qui reçoit du
+// courrier (MX, ou à défaut une adresse IP). En cas de doute DNS, on accepte.
+// La boîte elle-même ne peut pas être testée d'ici (port 25 fermé chez Supabase).
 const COMMON_DOMAINS = new Set(["gmail.com", "hotmail.fr", "hotmail.com", "outlook.fr", "outlook.com", "live.fr", "live.com", "yahoo.fr", "yahoo.com",
   "orange.fr", "wanadoo.fr", "free.fr", "sfr.fr", "neuf.fr", "laposte.net", "icloud.com", "me.com", "bbox.fr", "aol.com", "gmx.fr", "numericable.fr"]);
+const ROLE_RE = /^(no-?reply|do-?not-?reply|ne-?pas-?repondre|nepasrepondre|postmaster|abuse|mailer-daemon|bounce[s]?|hostmaster|root|nobody|devnull|null|test|example)([.+_-].*)?@/i;
+const DISPOSABLE = new Set(["yopmail.com", "yopmail.fr", "mailinator.com", "guerrillamail.com", "10minutemail.com", "tempmail.com", "temp-mail.org", "trashmail.com", "jetable.org", "getnada.com", "sharklasers.com", "maildrop.cc", "dispostable.com", "throwawaymail.com"]);
+const TYPO_DOMAINS = new Set(["gmial.com", "gmai.com", "gmail.fr", "gmal.com", "gamil.com", "gmail.co", "gnail.com", "hotmial.com", "hotmail.f", "hotmal.fr", "hotamil.fr", "outlok.fr", "outloo.fr",
+  "orange.fe", "orage.fr", "oragne.fr", "ornage.fr", "wanado.fr", "wanadoo.com", "wandoo.fr", "free.f", "fre.fr", "sfr.f", "laposte.fr", "lapost.net", "yaho.fr", "yahou.fr", "yahoo.f"]);
 const domainCache = new Map<string, boolean>();
 async function dnsJson(name: string, type: string) {
   const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${type}`, { headers: { Accept: "application/dns-json" }, signal: AbortSignal.timeout(4000) });
   return await r.json() as { Status?: number; Answer?: { type: number; data: string }[] };
 }
-export async function mailDomainOk(email: string) {
-  const domain = String(email || "").split("@")[1]?.trim().toLowerCase() || "";
-  if (!domain || !domain.includes(".")) return false;
-  if (COMMON_DOMAINS.has(domain)) return true;
-  if (domainCache.has(domain)) return domainCache.get(domain)!;
-  let ok = true;
-  try {
-    const mx = await dnsJson(domain, "MX");
-    const records = (mx.Answer || []).filter((a) => a.type === 15);
-    if (mx.Status === 3) ok = false; // le domaine n'existe pas
-    else if (records.length) ok = !records.every((a) => /^0\s+\.?$/.test(String(a.data).trim())); // « MX nul » : refuse tout courrier
-    else if (mx.Status === 0) { const a = await dnsJson(domain, "A"); ok = (a.Answer || []).some((x) => x.type === 1); }
-  } catch { ok = true; }
-  domainCache.set(domain, ok);
-  return ok;
+export async function checkAddress(email: string): Promise<{ ok: boolean; reason?: string }> {
+  const e = String(email || "").trim().toLowerCase();
+  if (!/^[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(e) || e.includes("..")) return { ok: false, reason: "adresse mal formée" };
+  if (ROLE_RE.test(e)) return { ok: false, reason: "adresse technique (noreply, postmaster…)" };
+  const domain = e.split("@")[1];
+  if (DISPOSABLE.has(domain)) return { ok: false, reason: "adresse jetable" };
+  if (TYPO_DOMAINS.has(domain)) return { ok: false, reason: "faute de frappe dans le domaine" };
+  if (COMMON_DOMAINS.has(domain)) return { ok: true };
+  if (!domainCache.has(domain)) {
+    let ok = true;
+    try {
+      const mx = await dnsJson(domain, "MX");
+      const records = (mx.Answer || []).filter((a) => a.type === 15);
+      if (mx.Status === 3) ok = false; // le domaine n'existe pas
+      else if (records.length) ok = !records.every((a) => /^0\s+\.?$/.test(String(a.data).trim())); // « MX nul » : refuse tout courrier
+      else if (mx.Status === 0) { const a = await dnsJson(domain, "A"); ok = (a.Answer || []).some((x) => x.type === 1); }
+    } catch { ok = true; }
+    domainCache.set(domain, ok);
+  }
+  return domainCache.get(domain) ? { ok: true } : { ok: false, reason: "domaine sans messagerie" };
 }
+export async function mailDomainOk(email: string) { return (await checkAddress(email)).ok; }
 
 export async function deliver(input: {
   settings: SenderSettings; template: MailTemplate; to: string; vars: Vars; token: string;
   trackingToken?: string; subjectPrefix?: string; inReplyTo?: string; source?: string;
   block?: ComposeBlock; plain?: boolean;
 }): Promise<DeliveryResult> {
-  if (!(await mailDomainOk(input.to))) {
-    return { ok: false, outcome: "recipient_rejected", error: "Domaine sans messagerie : adresse écartée avant l'envoi.", subject: input.template.subject, body: "" };
+  const check = await checkAddress(input.to);
+  if (!check.ok) {
+    return { ok: false, outcome: "recipient_rejected", error: `Adresse écartée avant l'envoi : ${check.reason}.`, subject: input.template.subject, body: "" };
   }
   const links = unsubscribeLinks(input.token);
   const videoThumb = input.block || input.plain ? "" : await resolveVideoThumb(input.settings.video_url || "");
