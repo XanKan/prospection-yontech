@@ -790,6 +790,17 @@
               <option value="replied">Ont répondu</option>
               <option value="scanner">Scanner seulement (clics automatiques)</option>
             </select>
+            <select class="inp" id="lMaq" style="width:auto" aria-label="Filtrer par maquette">
+              <option value="">Maquette : tous</option>
+              <option value="avec">Avec maquette</option>
+              <option value="refonte">Maquette refonte</option>
+              <option value="creation">Maquette création</option>
+              <option value="vue">Maquette vue</option>
+              <option value="revue">Maquette vue 2 fois ou plus</option>
+              <option value="pasvue">Maquette pas encore vue</option>
+              <option value="relance">Relancé après visite</option>
+              <option value="sans">Sans maquette</option>
+            </select>
             <span class="note" id="lCount"></span>
             <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <span class="pill num" id="lTotal" style="font-size:.95rem;padding:6px 12px" title="Nombre de lignes correspondant à l'onglet et aux filtres en cours">0</span>
@@ -2088,6 +2099,13 @@ function signalBadge(m){
   const proof = /siren/.test(how) ? "SIREN sur le site" : "nom et ville sur le site";
   return camp + ' <span class="badge ' + (/^search/.test(how) ? "open" : "video") + '" title="' + esc(site) + " · " + proof + '">' + (/^search/.test(how) ? "Recherche web" : /^rge/.test(how) ? "Site (RGE)" : "Site deviné") + "</span>";
 }
+function maqState(m){
+  const q = m.maquette; if (!q) return "";
+  const views = q.views || 0;
+  return '<div class="meta" style="margin-top:4px"><a href="' + esc(apercu(q.url)) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Maquette ' + (q.kind === "creation" ? "création" : "refonte") + '</a> · ' +
+    (views ? '<b style="color:var(--ok)">vue ' + views + ' fois</b>' + (q.last_view_at ? " (dernière " + esc(dateTimeFr(q.last_view_at)) + ")" : "") : "pas encore vue") +
+    (q.view_followup_at ? " · relancé après visite" : "") + "</div>";
+}
 function trackState(m){
   const SUPPRESSED = { desinscription: "Désinscrit", rebond: "Rebond", manuel: "Exclu", deja_contacte: "Exclu" };
   const parts = [];
@@ -2112,7 +2130,7 @@ async function loadLog(){
   try {
     const data = LOG.status === "followups"
       ? await api("followups.list", { page: LOG.page, search: $("lq").value, stage: $("lStage").value })
-      : await api("queue.list", { status: LOG.status, page: LOG.page, search: $("lq").value, track: LOG.status === "sent" ? $("lTrack").value : "", how: $("lHow").value, campagne: $("lCamp").value });
+      : await api("queue.list", { status: LOG.status, page: LOG.page, search: $("lq").value, track: LOG.status === "sent" ? $("lTrack").value : "", how: $("lHow").value, campagne: $("lCamp").value, maquette: LOG.status === "sent" || LOG.status === "all" ? $("lMaq").value : "" });
     if (seq !== logSeq) return;
     LOG.items = data.items; LOG.total = data.total; LOG.sel.clear();
     renderLog();
@@ -2122,6 +2140,7 @@ function renderLog(){
   document.querySelectorAll("#logTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.st === LOG.status));
   $("lDateH").textContent = LOG.status === "sent" ? "Envoyé le" : LOG.status === "followups" ? "Relance envoyée le" : LOG.status === "all" ? "Envoyé / ajouté le" : "Ajouté le";
   $("lTrack").hidden = LOG.status !== "sent";
+  $("lMaq").hidden = LOG.status !== "sent" && LOG.status !== "all";
   $("lHow").hidden = LOG.status === "followups";
   $("lCamp").hidden = LOG.status === "followups";
   $("lStage").hidden = LOG.status !== "followups";
@@ -2130,7 +2149,7 @@ function renderLog(){
   $("bLogRemove").textContent = LOG.status === "queued" ? "Retirer de la file" : "Supprimer";
   const pages = Math.max(1, Math.ceil(LOG.total / 50));
   $("lPage").textContent = "Page " + LOG.page + " / " + pages + " · " + fmt(LOG.total) + " ligne(s)";
-  const filtered = !!($("lq").value || (!$("lTrack").hidden && $("lTrack").value) || (!$("lHow").hidden && $("lHow").value) || (!$("lCamp").hidden && $("lCamp").value) || (!$("lStage").hidden && $("lStage").value));
+  const filtered = !!($("lq").value || (!$("lTrack").hidden && $("lTrack").value) || (!$("lMaq").hidden && $("lMaq").value) || (!$("lHow").hidden && $("lHow").value) || (!$("lCamp").hidden && $("lCamp").value) || (!$("lStage").hidden && $("lStage").value));
   $("lTotal").textContent = fmt(LOG.total) + (filtered ? " filtré(s)" : "");
   $("lTotal").style.background = filtered ? "var(--violet)" : "";
   $("lTotal").style.color = filtered ? "#fff" : "";
@@ -2156,7 +2175,7 @@ function renderLog(){
     '<td class="num">' + (m.score == null ? "—" : m.score) + "</td>" +
     '<td class="nw">' + esc(ORIGIN[m.origin] || m.origin) + signalBadge(m) + "</td>" +
     '<td class="nw">' + esc(dateTimeFr(LOG.status === "sent" || (LOG.status === "all" && m.sent_at) ? m.sent_at : m.created_at)) + "</td>" +
-    '<td><span class="badge ' + esc(m.status) + '">' + esc(BADGE[m.status] || m.status) + "</span>" + (m.status === "sent" ? trackState(m) : "") + (m.error && m.status !== "sent" ? '<div class="meta">' + esc(m.error) + "</div>" : "") + "</td></tr>"
+    '<td><span class="badge ' + esc(m.status) + '">' + esc(BADGE[m.status] || m.status) + "</span>" + (m.status === "sent" ? trackState(m) : "") + maqState(m) + (m.error && m.status !== "sent" ? '<div class="meta">' + esc(m.error) + "</div>" : "") + "</td></tr>"
   ).join("") : '<tr><td colspan="6" class="empty"><b>Rien ici</b>' + esc(empty[LOG.status]) + "</td></tr>";
   logSel();
 }
@@ -2169,6 +2188,7 @@ function logSel(){
 $("logTabs").addEventListener("click", ev => { const t = ev.target.closest("[data-st]"); if (!t) return; LOG.status = t.dataset.st; LOG.page = 1; loadLog(); });
 $("lq").addEventListener("input", () => { clearTimeout(logT); logT = setTimeout(() => { LOG.page = 1; loadLog(); }, 300); });
 $("lTrack").addEventListener("change", () => { LOG.page = 1; loadLog(); });
+$("lMaq").addEventListener("change", () => { LOG.page = 1; loadLog(); });
 $("lHow").addEventListener("change", () => { LOG.page = 1; loadLog(); });
 $("lCamp").addEventListener("change", () => { LOG.page = 1; loadLog(); });
 $("lStage").addEventListener("change", () => { LOG.page = 1; loadLog(); });

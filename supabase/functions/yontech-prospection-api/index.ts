@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     }
     if (action === "queue.list") {
       const status = text(payload.status, 20), page = integer(payload.page ?? 1, 1, 100000), size = 50, q = searchTerm(payload.search);
-      const track = text(payload.track, 20), how = text(payload.how, 20), campagne = text(payload.campagne, 20);
+      const track = text(payload.track, 20), how = text(payload.how, 20), campagne = text(payload.campagne, 20), maq = text(payload.maquette, 20);
       let query = db.from("yontech_prospection_messages").select(`id,siren,email,company,score,origin,status,subject,error,created_at,sent_at,data,opened_at,open_count,video_clicked_at,site_clicked_at,replied_at,scanner_at,scanner_hits,yontech_prospection_followups${status === "sent" && track === "followed" ? "!inner" : ""}(stage,status,sent_at)`, { count: "exact" });
       if (status === "queued") query = query.in("status", ["queued", "sending"]);
       else if (["sent", "failed", "skipped"].includes(status)) query = query.eq("status", status);
@@ -299,6 +299,20 @@ Deno.serve(async (req) => {
       // Filtre « Campagne » : logiciel (campagne absente = logiciel) ou sites internet.
       if (campagne === "site") query = query.eq("data->>campagne", "site");
       else if (campagne === "logiciel") query = query.or("data->>campagne.is.null,data->>campagne.neq.site");
+      // Filtre « Maquette » : prospects qui ont reçu une maquette (type, vue ou non), ou pas.
+      if (maq === "sans") query = query.is("data->>maquette", null);
+      else if (maq) {
+        // deno-lint-ignore no-explicit-any
+        let mq: any = db.from("yontech_maquettes").select("message_id").eq("review", "envoye").not("message_id", "is", null);
+        if (maq === "refonte" || maq === "creation") mq = mq.eq("kind", maq);
+        else if (maq === "vue") mq = mq.gt("views", 0);
+        else if (maq === "revue") mq = mq.gte("views", 2);
+        else if (maq === "pasvue") mq = mq.eq("views", 0);
+        else if (maq === "relance") mq = mq.not("view_followup_at", "is", null);
+        const { data: ids } = await mq.order("sent_at", { ascending: false }).limit(400);
+        const list = ((ids || []) as Rec[]).map((r) => r.message_id as string);
+        query = query.in("id", list.length ? list : ["00000000-0000-0000-0000-000000000000"]);
+      }
       if (status === "sent" && track) {
         if (track === "opened") query = query.not("opened_at", "is", null);
         else if (track === "unopened") query = query.is("opened_at", null);
@@ -315,7 +329,14 @@ Deno.serve(async (req) => {
         const { data: sup } = await db.from("yontech_prospection_suppressions").select("email,reason").in("email", data.map((m) => m.email));
         for (const row of sup || []) suppressed.set(row.email, row.reason);
       }
-      const items = (data || []).map((m) => ({ ...m, prospection_followups: (m as Record<string, unknown>).yontech_prospection_followups, suppressed: suppressed.get(m.email) || null }));
+      // Maquette envoyée à chaque prospect affiché (type, visites, relance après visite).
+      const maqs = new Map<string, Rec>();
+      if (data?.length) {
+        const { data: rows } = await db.from("yontech_maquettes").select("message_id,slug,kind,views,last_view_at,view_followup_at,sent_at").eq("review", "envoye").in("message_id", data.map((m) => m.id));
+        for (const r of rows || []) maqs.set(r.message_id as string, r);
+      }
+      const ready = maqs.size ? await maquetteDomainReady() : false;
+      const items = (data || []).map((m) => { const q = maqs.get(m.id); return { ...m, prospection_followups: (m as Record<string, unknown>).yontech_prospection_followups, suppressed: suppressed.get(m.email) || null, maquette: q ? { ...q, url: maquetteUrl(q.slug, ready) } : null }; });
       return response(req, { items, total: count || 0, page, size });
     }
     if (action === "followups.list") {
