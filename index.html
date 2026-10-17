@@ -2237,6 +2237,12 @@ async function openMessage(id){
           m.video_clicked_at ? "vidéo ouverte le " + dateTimeFr(m.video_clicked_at) : "",
           m.site_clicked_at ? "lien cliqué le " + dateTimeFr(m.site_clicked_at) : "",
         ].filter(Boolean).map(esc).join(" · ") || "pas encore ouvert") + (m.scanner_at ? " · filtre de sécurité : " + esc(m.scanner_hits || 1) + " clic(s) automatique(s) ignoré(s)" : "") + "</dd></div>" : "") +
+        (m.maquette ? '<div style="grid-column:1/-1"><dt>Maquette</dt><dd>' + (m.maquette.kind === "creation" ? "Création" : "Refonte") + " envoyée le " + esc(dateTimeFr(m.maquette.sent_at)) +
+          " · objet « " + esc(String(m.maquette.mail_subject || "").replaceAll("{entreprise}", niceCompany(m.company) || "")) + " » · " +
+          (m.maquette.views ? "vue " + m.maquette.views + " fois (première le " + esc(dateTimeFr(m.maquette.first_view_at)) + (m.maquette.views > 1 ? ", dernière le " + esc(dateTimeFr(m.maquette.last_view_at)) : "") + ")" : "pas encore vue") +
+          (m.maquette.view_followup_at ? " · relance après visite le " + esc(dateTimeFr(m.maquette.view_followup_at)) : "") +
+          ' · <a href="' + esc(apercu(m.maquette.url)) + '" target="_blank" rel="noopener">voir la maquette</a>' +
+          '<div class="meta">Le suivi (ouvertures, clics) regroupe le mail classique et le mail de la maquette.</div></dd></div>' : "") +
         (m.status === "sent" ? "<div><dt>Relances</dt><dd>" + ((m.prospection_followups || []).sort((a, b) => a.stage - b.stage).map(f =>
           "relance " + f.stage + " : " + (f.status === "sent" ? "envoyée le " + dateTimeFr(f.sent_at) : f.status === "failed" ? "échec" : "en attente")).map(esc).join(" · ")
           || (m.replied_at ? "arrêtées" : "aucune pour l'instant")) + (m.replied_at ? " · marqué « a répondu » le " + esc(dateTimeFr(m.replied_at)) : "") + "</dd></div>" : "") +

@@ -353,7 +353,10 @@ Deno.serve(async (req) => {
     }
     if (action === "queue.get") {
       const message = check(await db.from("yontech_prospection_messages").select("*,yontech_prospection_followups(id,stage,status,subject,body,sent_at,error)").eq("id", uuid(payload.id)).single()) as Record<string, unknown>;
-      return response(req, { message: { ...message, prospection_followups: message.yontech_prospection_followups } });
+      // Maquette envoyée à ce prospect (après ou à la place du mail classique).
+      const { data: maq } = await db.from("yontech_maquettes").select("slug,kind,sent_at,mail_subject,views,first_view_at,last_view_at,view_followup_at").eq("message_id", message.id as string).eq("review", "envoye").order("sent_at", { ascending: false }).limit(1).maybeSingle();
+      const maquette = maq ? { ...maq, url: maquetteUrl(maq.slug, await maquetteDomainReady()) } : null;
+      return response(req, { message: { ...message, prospection_followups: message.yontech_prospection_followups, maquette } });
     }
     if (action === "queue.replied") {
       const result = check(await db.rpc("yontech_prospection_mark_replied", { target_id: uuid(payload.id), replied: payload.replied !== false }));
