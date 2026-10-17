@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { buildSite, RESERVED_SLUGS, slugify } from "./yontech-maquette.ts";
+import { creationData } from "./yontech-maquette-creation.ts";
 
 // Prospection par maquette : chaque jour, l'outil prépare un nombre fixe de
 // prospects de la campagne « sites » qui ont déjà un site (20 par défaut) :
@@ -88,7 +89,7 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
   const { data: settings } = await db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_subject,maquette_body").eq("id", 1).single();
   if (!settings) return { state: "error", error: "settings" };
   if (!settings.maquette_enabled && !opts.force) return { state: "disabled" };
-  const { count: today } = await db.from("yontech_maquettes").select("id", { count: "exact", head: true }).not("review", "is", null).gte("prepared_at", parisMidnightIso());
+  const { count: today } = await db.from("yontech_maquettes").select("id", { count: "exact", head: true }).eq("kind", "refonte").not("review", "is", null).gte("prepared_at", parisMidnightIso());
   let todo = Math.min(opts.max, Math.max(0, Number(settings.maquette_daily || 0) - (today || 0)));
   // « Préparer maintenant » : le nombre demandé, même si le quota du jour est atteint.
   if (opts.force) todo = opts.max;
@@ -181,4 +182,68 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     prepared++; todo--;
   }
   return { state: "done", prepared, failed, errors: errors.slice(0, 5), today: (today || 0) + prepared };
+}
+
+export const CREATION_SUBJECT = "{entreprise} : nous avons créé votre site internet";
+export const CREATION_BODY = `{bonjour},
+
+Quand un client cherche {entreprise} sur internet, il ne trouve aujourd'hui aucun site. Nous avons donc pris les devants et créé le vôtre :
+
+{maquette}
+
+Les textes sont une première proposition, à ajuster avec vous. Le site s'affiche parfaitement sur téléphone et met en avant votre numéro et la demande de devis.
+
+La création est offerte : vous ne payez que 39 € par mois (hébergement, nom de domaine et mises à jour compris), sans engagement.
+
+Répondez simplement « ok » et nous le mettons en ligne avec vos corrections.
+
+Bien cordialement,`;
+
+const placeholder = (name: string) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${name.replace(/[<>&"]/g, "")}</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;font:600 18px system-ui,sans-serif;color:#333">Site en préparation</body></html>`;
+
+// Maquettes « création » : entreprises sans site, données publiques seulement,
+// site dessiné par Claude (aucune lecture de site : plusieurs par passage).
+export async function prepareCreations(db: SupabaseClient, opts: { max: number }) {
+  const { data: settings } = await db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily_creation").eq("id", 1).single();
+  if (!settings?.maquette_enabled) return { state: "disabled" };
+  const { count: today } = await db.from("yontech_maquettes").select("id", { count: "exact", head: true }).eq("kind", "creation").not("review", "is", null).gte("prepared_at", parisMidnightIso());
+  let todo = Math.min(opts.max, Math.max(0, Number(settings.maquette_daily_creation || 0) - (today || 0)));
+  let prepared = 0;
+  for (let guard = 0; todo > 0 && guard < opts.max * 3; guard++) {
+    // 1. File d'attente, puis 2. prospects déjà contactés sans réponse (ouvreurs d'abord).
+    let { data: list } = await db.from("yontech_prospection_messages").select("id,email,company,data,status")
+      .eq("status", "queued").eq("data->>campagne", "site").in("data->>sanssite", ["1", "true"]).is("data->>maquette_essai", null)
+      .order("score", { ascending: false, nullsFirst: false }).limit(10);
+    if (!list?.length) {
+      ({ data: list } = await db.from("yontech_prospection_messages").select("id,email,company,data,status")
+        .eq("status", "sent").eq("data->>campagne", "site").in("data->>sanssite", ["1", "true"]).or('data->>maquette_essai.is.null,data->>maquette_essai.eq."sans site"')
+        .is("replied_at", null).lt("sent_at", new Date(Date.now() - 24 * 3_600_000).toISOString())
+        .order("opened_at", { ascending: false, nullsFirst: false }).order("sent_at", { ascending: false }).limit(50));
+    }
+    const { data: taken } = list?.length ? await db.from("yontech_maquettes").select("message_id").in("message_id", list.map((c) => c.id)) : { data: [] };
+    const has = new Set((taken || []).map((x) => x.message_id));
+    const cand = (list || []).find((c) => !has.has(c.id) && c.email);
+    if (!cand) break;
+    const fromQueue = cand.status === "queued";
+    if (fromQueue) {
+      const { data: reserved } = await db.from("yontech_prospection_messages").update({ status: "maquette" }).eq("id", cand.id).eq("status", "queued").select("id").maybeSingle();
+      if (!reserved) continue;
+    }
+    await db.from("yontech_prospection_messages").update({ data: { ...(cand.data || {}), maquette_essai: "création" } }).eq("id", cand.id);
+    const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", cand.email).maybeSingle();
+    if (banned) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "skipped", error: "Adresse exclue" }).eq("id", cand.id); continue; }
+    const data = creationData(cand as { company: string; email: string; data: Record<string, unknown> });
+    const slug = await uniqueSlug(db, slugify(data.name));
+    const { data: tpls } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("kind", "maquette_creation").eq("active", true);
+    const tpl = (tpls || []).length ? tpls![Math.floor(Math.random() * tpls!.length)] : null;
+    const { error } = await db.from("yontech_maquettes").insert({
+      slug, message_id: cand.id, source_url: "", host: "", company: data.name, data, html: placeholder(data.name), kind: "creation",
+      status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(), design_status: "attente",
+      template_id: tpl?.id || null, mail_subject: tpl?.subject || CREATION_SUBJECT, mail_body: tpl?.body || CREATION_BODY,
+    });
+    if (error) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "queued" }).eq("id", cand.id); continue; }
+    if (!fromQueue) await db.from("yontech_prospection_followups").delete().eq("message_id", cand.id).eq("status", "queued");
+    prepared++; todo--;
+  }
+  return { state: "done", prepared, today: (today || 0) + prepared };
 }

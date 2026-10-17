@@ -594,7 +594,11 @@
           <div class="kpi ke"><div class="lab">Réponses</div><div class="val num" id="mqpKReplied">0</div><div class="foot">à rappeler en priorité</div></div>
         </div>
 
-        <div class="card" style="margin-top:16px">
+        <div style="display:flex;gap:8px;margin-top:16px" id="mqpTabs">
+          <button type="button" class="b b-sm b-main" data-mqpk="refonte">Refonte <span id="mqpNRef"></span></button>
+          <button type="button" class="b b-sm b-out" data-mqpk="creation">Création <span id="mqpNCre"></span></button>
+        </div>
+        <div class="card" style="margin-top:12px">
           <div class="card-h"><h2>À valider</h2><span class="sub" id="mqpCount"></span>
             <div class="right">
               <button type="button" class="b b-out b-sm" id="bMqpPrep">Préparer maintenant</button>
@@ -621,7 +625,8 @@
           </div>
           <div class="card-b">
             <div class="fields">
-              <div class="fld" style="max-width:190px"><label for="mqpDaily">Maquettes préparées par jour</label><input class="inp num" type="number" id="mqpDaily" min="0" max="100"></div>
+              <div class="fld" style="max-width:190px"><label for="mqpDaily">Refontes préparées par jour</label><input class="inp num" type="number" id="mqpDaily" min="0" max="100"></div>
+              <div class="fld" style="max-width:190px"><label for="mqpDailyC">Créations préparées par jour</label><input class="inp num" type="number" id="mqpDailyC" min="0" max="200"></div>
             </div>
             <p class="note" style="margin-top:12px" id="mqpTplNote"></p>
             <p style="margin-top:8px"><a href="#" class="b b-out b-sm" data-go="tpl">Modifier le mail dans Messages</a></p>
@@ -711,7 +716,7 @@
               <div class="card-b">
                 <div class="fields tpl-fields">
                   <div class="fld"><label for="tName">Nom interne</label><input class="inp" id="tName" maxlength="120" placeholder="ex. Application sur-mesure — industrie"></div>
-                  <div class="fld"><label for="tKind">Type</label><select class="inp" id="tKind"><option value="initial">Premier contact</option><option value="relance1">Relance 1</option><option value="relance2">Relance 2 (dernière)</option><option value="maquette">Prospection maquette</option></select>
+                  <div class="fld"><label for="tKind">Type</label><select class="inp" id="tKind"><option value="initial">Premier contact</option><option value="relance1">Relance 1</option><option value="relance2">Relance 2 (dernière)</option><option value="maquette">Prospection maquette (refonte)</option><option value="maquette_creation">Prospection maquette (création)</option><option value="relance_vue">Relance après visite de la maquette</option></select>
                     <p class="help">Une relance part dans le fil du premier message, en « Re : », aux destinataires qui n'ont pas répondu. Délais et conditions dans Réglages. « Prospection maquette » : mail qui présente la maquette du site refait, envoyé depuis l'onglet du même nom après votre validation ; placez {maquette} seul sur sa ligne.</p></div>
                   <div class="fld"><label for="tCampagne">Campagne</label><select class="inp" id="tCampagne"><option value="logiciel">Logiciel et applications</option><option value="site">Sites internet</option></select>
                     <p class="help">Chaque prospect appartient à une campagne : « Sites internet » pour les entreprises sans site ou au site dépassé, « Logiciel » pour les autres. Un prospect ne reçoit que les modèles de sa campagne.</p></div>
@@ -1127,7 +1132,8 @@ document.addEventListener("click", ev => {
 /* ============================================================
    PROSPECTION MAQUETTE — 20 mails préparés par jour, envoyés après validation
    ============================================================ */
-let MQP = null;
+let MQP = null, MQP_KIND = "refonte";
+document.addEventListener("click", ev => { const b = ev.target.closest("[data-mqpk]"); if (!b) return; MQP_KIND = b.dataset.mqpk; renderMqp(); });
 
 async function loadMqp(){
   MQP = await api("mqp.state");
@@ -1151,13 +1157,18 @@ function designLine(r){
 function renderMqp(){
   if (!MQP) return;
   $("pillMqp").hidden = !(MQP.pending || []).length; $("pillMqp").textContent = (MQP.pending || []).length;
-  const s = MQP.settings, st = MQP.stats, pend = MQP.pending || [], sent = MQP.sent || [];
+  const s = MQP.settings, st = MQP.stats, allPend = MQP.pending || [], allSent = MQP.sent || [];
+  const kindOf = r => r.kind || "refonte";
+  const pend = allPend.filter(r => kindOf(r) === MQP_KIND), sent = allSent.filter(r => kindOf(r) === MQP_KIND);
+  $("mqpNRef").textContent = "(" + allPend.filter(r => kindOf(r) === "refonte").length + ")";
+  $("mqpNCre").textContent = "(" + allPend.filter(r => kindOf(r) === "creation").length + ")";
+  document.querySelectorAll("#mqpTabs [data-mqpk]").forEach(b => { const on = b.dataset.mqpk === MQP_KIND; b.classList.toggle("b-main", on); b.classList.toggle("b-out", !on); });
   const banners = [];
   if (!MQP.domainReady) banners.push('<div class="banner warn"><div class="grow"><b>Adresses nom.yontech.fr pas encore branchées.</b> Les mails partent avec le lien provisoire prospection.yontech.fr/maquette.html, qui fonctionne. Ils basculeront seuls sur nom.yontech.fr après le réglage Cloudflare.</div></div>');
   if (!s.enabled) banners.push('<div class="banner info"><div class="grow"><b>Préparation automatique coupée.</b> Plus aucun mail n\'est préparé ; activez-la dans les réglages en bas de page.</div></div>');
   $("mqpBanners").innerHTML = banners.join("");
   $("mqpKPending").textContent = st.pending;
-  $("mqpKToday").innerHTML = st.preparedToday + ' <small>/ ' + s.daily + '</small>';
+  $("mqpKToday").innerHTML = (MQP_KIND === "creation" ? (st.preparedTodayCreation || 0) + ' <small>/ ' + (s.dailyCreation ?? 20) : st.preparedToday + ' <small>/ ' + s.daily) + '</small>';
   $("mqpKTodayF").textContent = s.enabled ? "une maquette toutes les 5 min" : "préparation coupée";
   $("mqpKSent").textContent = st.sent;
   $("mqpKSentF").textContent = st.opened + " ouvert(s) · " + st.clicked + " clic(s)";
@@ -1173,7 +1184,7 @@ function renderMqp(){
       '<a class="mqp-shot" href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener" title="Ouvrir la maquette">' + (d.image ? '<img src="' + esc(d.image) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") + '<span style="background:' + esc(d.accent || "#444") + '">' + esc(d.tagline || r.company) + '</span></a>' +
       '<div class="mqp-main"><div class="who">' + esc(m.company || r.company) + '</div>' +
         (m.status === "sent" ? '<div class="meta" style="color:var(--ok)"><b>Déjà contacté</b> par le mail classique le ' + dateFr(m.sent_at) + (m.opened_at ? ", ouvert le " + dateFr(m.opened_at) + " à " + timeFr(m.opened_at) : "") + ' : la maquette sert de relance.</div>' : "") +
-        '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + " · " + (1 + (d.pages || []).length) + ' page(s) · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
+        '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + " · " + (r.source_url ? 'site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a>' : "sans site aujourd'hui") + ' · maquette <a href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
         designLine(r) +
         (d.quality && d.quality.warnings && d.quality.warnings.length ? '<div class="meta" style="color:#b96c14"><b>À vérifier :</b> ' + esc(d.quality.warnings.join(" · ")) + '</div>' : "") +
         '<input class="inp" data-f="subject" maxlength="200" value="' + esc(r.mail_subject || s.subject) + '" aria-label="Objet">' +
@@ -1192,7 +1203,7 @@ function renderMqp(){
   const tpls = s.templates || [];
   $("mqpTplNote").innerHTML = tpls.length ? "Texte du mail : modèle(s) de type « Prospection maquette » de l'écran Messages — " + tpls.map(t => "<b>" + esc(t.name) + "</b>" + (t.active ? "" : " (inactif)")).join(", ") + ". Plusieurs modèles actifs sont tirés au hasard. Un nouveau texte s'applique aux prochains mails préparés ; ceux en attente restent modifiables un par un ci-dessus." : "Aucun modèle « Prospection maquette » : le texte par défaut est utilisé. Créez-en un dans Messages pour le personnaliser.";
   if (document.activeElement !== $("mqpDaily")){
-    $("mqpOn").checked = !!s.enabled; $("mqpDaily").value = s.daily;
+    $("mqpOn").checked = !!s.enabled; $("mqpDaily").value = s.daily; $("mqpDailyC").value = s.dailyCreation ?? 20;
   }
 }
 const mqpFields = item => ({ subject: item.querySelector('[data-f="subject"]').value, body: item.querySelector('[data-f="body"]').value });
@@ -1261,7 +1272,8 @@ $("bMqpPrep").addEventListener("click", async () => {
       busy($("bMqpPrep"), true, "Préparation " + (prepared + 1) + "/" + want + "…");
       let r;
       // Un site trop lourd fait échouer son appel : on passe au suivant.
-      try { r = await api("mqp.prepare", {}); } catch(e){ failed++; continue; }
+      try { r = await api("mqp.prepare", MQP_KIND === "creation" ? { kind: "creation" } : {}); } catch(e){ failed++; continue; }
+      if (MQP_KIND === "creation"){ prepared += r.prepared || 0; await loadMqp().catch(() => {}); break; }
       prepared += r.prepared || 0; failed += r.failed || 0;
       if (!r.prepared && !r.failed) break;
       await loadMqp().catch(() => {});
@@ -1275,7 +1287,7 @@ $("mqpForm").addEventListener("submit", async ev => {
   ev.preventDefault();
   busy($("bMqpSave"), true);
   try {
-    await api("mqp.settings", { enabled: $("mqpOn").checked, daily: Number($("mqpDaily").value) });
+    await api("mqp.settings", { enabled: $("mqpOn").checked, daily: Number($("mqpDaily").value), dailyCreation: Number($("mqpDailyC").value) });
     toast("Réglages enregistrés."); await loadMqp();
   } catch(e){ toast(e.message || "Enregistrement impossible."); }
   busy($("bMqpSave"), false);
@@ -1921,13 +1933,18 @@ $("varChips").addEventListener("click", ev => {
   renderPreview();
 });
 
+function tplStats(t){
+  const st = t.stats || {}; if (!st.sent) return '<span style="color:var(--mute)">Pas encore envoyé</span>';
+  const rate = st.sent ? (st.replied * 100 / st.sent) : 0;
+  return '<span style="color:' + (st.replied ? "var(--ok)" : "var(--mute)") + '">' + st.sent + " envoi(s) · " + st.replied + " réponse(s) · " + (rate >= 1 ? Math.round(rate) : rate.toFixed(1)) + " %</span>";
+}
 function renderTemplates(){
   if (!state) return;
   const list = state.templates;
   if (tplId && !list.some(t => t.id === tplId)) tplId = null;
   if (tplId === null && list.length && !$("tName").dataset.dirty) tplId = list[0].id;
   $("tplList").innerHTML = list.map(t =>
-    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + (AUDIENCE[t.audience] ? ' <code class="k">' + AUDIENCE[t.audience] + "</code>" : "") + (t.campagne === "site" ? ' <code class="k" style="background:var(--blue-soft);color:var(--blue)">sites</code>' : "") + "</b><span>" + esc(t.kind === "relance1" || t.kind === "relance2" ? "Re : objet du premier message" : t.subject) + "</span></button>"
+    '<button type="button" class="tpl-item' + (t.id === tplId ? " on" : "") + '" data-tpl="' + esc(t.id) + '"><em class="' + (t.active ? "on" : "off") + '">' + (t.active ? "Actif" : "Inactif") + "</em><b>" + esc(t.name) + (KIND[t.kind] ? ' <code class="k">' + KIND[t.kind] + "</code>" : "") + (AUDIENCE[t.audience] ? ' <code class="k">' + AUDIENCE[t.audience] + "</code>" : "") + (t.campagne === "site" ? ' <code class="k" style="background:var(--blue-soft);color:var(--blue)">sites</code>' : "") + "</b><span>" + esc(t.kind === "relance1" || t.kind === "relance2" || t.kind === "relance_vue" ? "Re : objet du premier message" : t.subject) + "</span>" + tplStats(t) + "</button>"
   ).join("") || '<p class="note" style="margin-bottom:10px">Aucun modèle pour l\'instant.</p>';
   // Une modification en cours n'est jamais écrasée par un rafraîchissement.
   if (!$("tName").dataset.dirty) fillTemplate(list.find(x => x.id === tplId) || { name: "", subject: "", body: "", active: true });
@@ -1948,12 +1965,12 @@ async function loadSamples(){
     renderSampleOptions();
   } catch(e){}
 }
-const KIND = { relance1: "relance 1", relance2: "relance 2", maquette: "maquette" };
+const KIND = { relance1: "relance 1", relance2: "relance 2", maquette: "maquette refonte", maquette_creation: "maquette création", relance_vue: "relance après visite" };
 const AUDIENCE = { sanssite: "sans site", avecsite: "avec site" };
 const CAMPAGNE = { logiciel: "Logiciel", site: "Sites internet" };
 // Une relance part toujours en « Re : » sur l'objet du premier message : son objet propre ne sert pas.
 function syncKind(){
-  const relance = $("tKind").value === "relance1" || $("tKind").value === "relance2";
+  const relance = $("tKind").value === "relance1" || $("tKind").value === "relance2" || $("tKind").value === "relance_vue";
   $("tSubject").disabled = relance;
   if (relance) $("tSubject").value = "Re : (objet du premier message)";
 }
@@ -2022,7 +2039,7 @@ $("bTplTest").addEventListener("click", async ev => {
   busy(btn, true, "Envoi du test…");
   $("tplMsg").textContent = "";
   try {
-    if ($("tKind").value === "maquette"){
+    if ($("tKind").value === "maquette" || $("tKind").value === "maquette_creation"){
       // Test sur la dernière maquette en ligne, avec son vrai aperçu.
       const r = await api("maquette.send", { template: { subject: $("tSubject").value, body: $("tBody").value }, to: $("tTestTo").value.trim() || undefined });
       $("tplMsg").textContent = "Test envoyé à " + r.to + " avec la maquette « " + r.company + " ». Vérifiez aussi le dossier indésirables.";

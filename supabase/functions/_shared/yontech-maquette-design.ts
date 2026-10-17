@@ -1,6 +1,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { sourceText } from "./yontech-maquette-ai.ts";
+import { creationBrief } from "./yontech-maquette-creation.ts";
 import { px } from "./yontech-maquette-render.ts";
 import type { SiteData } from "./yontech-maquette.ts";
 
@@ -57,7 +58,7 @@ Chaque section doit exister parce que le contenu de CETTE entreprise la justifie
 
 Réponds uniquement par le document HTML complet, de <!doctype html> à </html>, sans commentaire avant ni après. Dans le <head>, ajoute <meta name="yt-direction" content="nom court de la direction retenue">.`;
 
-type DesignRow = { id: string; slug: string; data: SiteData; design_attempts: number | null };
+type DesignRow = { id: string; slug: string; data: SiteData; design_attempts: number | null; kind?: string | null };
 
 function client() {
   const apiKey = Deno.env.get("YONTECH_ANTHROPIC_API_KEY") || "";
@@ -93,26 +94,27 @@ async function usableImage(url: string) {
 
 async function buildRequest(row: DesignRow) {
   const d = row.data;
+  const creation = row.kind === "creation";
   const photos: string[] = [];
   for (const u of [d.heroImage, d.aboutImage, d.bandImage, ...(d.gallery || []), ...d.services.map((s) => s.image), ...d.images]) {
     const p = px(u || "");
     if (p && !photos.includes(p)) photos.push(p);
   }
   const usable: string[] = [];
-  for (const p of photos) { if (usable.length >= MAX_IMAGES) break; if (await usableImage(p)) usable.push(p); }
-  const logo = d.logo && (await usableImage(px(d.logo))) ? px(d.logo) : "";
+  if (!creation) for (const p of photos) { if (usable.length >= MAX_IMAGES) break; if (await usableImage(p)) usable.push(p); }
+  const logo = !creation && d.logo && (await usableImage(px(d.logo))) ? px(d.logo) : "";
   const content: Anthropic.ContentBlockParam[] = [];
   if (logo) content.push({ type: "text", text: `LOGO — URL à utiliser : ${logo}` }, { type: "image", source: { type: "url", url: logo } });
   usable.forEach((u, i) => content.push({ type: "text", text: `PHOTO ${i + 1} — URL à utiliser : ${u}` }, { type: "image", source: { type: "url", url: u } }));
   const directions = pickDirections(row.id);
   content.push({
     type: "text",
-    text: `ENTREPRISE À METTRE EN VALEUR (contenu extrait de son site actuel ${d.source}) :
+    text: `ENTREPRISE À METTRE EN VALEUR (${creation ? "données publiques : registre des entreprises, annuaire RGE" : `contenu extrait de son site actuel ${d.source}`}) :
 
 ${sourceText(d, { paragraphs: [], pages: (d.pages || []).map((pg) => ({ label: pg.label, blocks: pg.blocks })), imageNames: [] })}
 
 COORDONNÉES À UTILISER TELLES QUELLES : téléphone ${d.phone || "(aucun)"} · e-mail ${d.email || "(aucun)"} · adresse ${d.address || d.city || "(aucune)"}${d.hours.length ? ` · horaires ${d.hours.join(" ; ")}` : ""}
-COULEUR PRINCIPALE RELEVÉE SUR LE SITE : ${d.accent}
+${creation ? creationBrief(d) : `COULEUR PRINCIPALE RELEVÉE SUR LE SITE : ${d.accent}`}
 
 DIRECTIONS ARTISTIQUES PROPOSÉES (choisis celle qui convient le mieux au métier et aux photos, et pousse-la loin) :
 ${directions.map((x, i) => `${i + 1}. ${x}`).join("\n")}
@@ -170,7 +172,7 @@ export function finalizeHtml(raw: string, d: SiteData, allowed: string[]): { htm
   // Bandeau Yontech, non indexation, repère de version.
   const direction = ((html.match(/<meta\s+name="yt-direction"\s+content="([^"]*)"/i) || [])[1] || "").slice(0, 80);
   html = html.replace(/<head([^>]*)>/i, `<head$1><meta name="robots" content="noindex,nofollow"><meta name="yt-design" content="ia">`);
-  const bar = `<div id="yt-badge" style="position:fixed;right:10px;bottom:10px;z-index:2147483000;display:flex;gap:8px;align-items:center;padding:6px 6px 6px 10px;border-radius:8px;background:rgba(17,17,17,.82);color:#fff;font:600 11px/1.3 system-ui,-apple-system,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.2);max-width:calc(100vw - 20px)"><span>Maquette Yontech pour ${esc(d.name)}</span><a href="${esc(d.source)}" target="_blank" rel="noopener nofollow" style="color:#fff;opacity:.75;text-decoration:underline;white-space:nowrap">Site actuel</a><button type="button" aria-label="Masquer" onclick="this.parentNode.remove()" style="all:unset;cursor:pointer;padding:2px 6px;opacity:.7;font-size:14px;line-height:1">×</button></div>`;
+  const bar = `<div id="yt-badge" style="position:fixed;right:10px;bottom:10px;z-index:2147483000;display:flex;gap:8px;align-items:center;padding:6px 6px 6px 10px;border-radius:8px;background:rgba(17,17,17,.82);color:#fff;font:600 11px/1.3 system-ui,-apple-system,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.2);max-width:calc(100vw - 20px)"><span>Maquette Yontech pour ${esc(d.name)}</span>${d.source ? `<a href="${esc(d.source)}" target="_blank" rel="noopener nofollow" style="color:#fff;opacity:.75;text-decoration:underline;white-space:nowrap">Site actuel</a>` : ""}<button type="button" aria-label="Masquer" onclick="this.parentNode.remove()" style="all:unset;cursor:pointer;padding:2px 6px;opacity:.7;font-size:14px;line-height:1">×</button></div>`;
   html = /<body[^>]*>/i.test(html) ? html.replace(/<body([^>]*)>/i, `<body$1>${bar}`) : html.replace(/<\/html>/i, `${bar}</html>`);
   return { html, direction };
 }
@@ -179,7 +181,7 @@ export function finalizeHtml(raw: string, d: SiteData, allowed: string[]): { htm
 export async function submitDesigns(db: SupabaseClient, max = 4) {
   const ai = client();
   if (!ai) return { submitted: 0, note: "clé IA absente" };
-  const { data: rows } = await db.from("yontech_maquettes").select("id,slug,data,design_attempts").eq("design_status", "attente").eq("status", "en_ligne").not("data", "is", null).order("prepared_at", { ascending: false, nullsFirst: false }).limit(max);
+  const { data: rows } = await db.from("yontech_maquettes").select("id,slug,data,design_attempts,kind").eq("design_status", "attente").eq("status", "en_ligne").not("data", "is", null).order("prepared_at", { ascending: false, nullsFirst: false }).limit(max);
   if (!rows?.length) return { submitted: 0 };
   const built: { row: DesignRow; req: Awaited<ReturnType<typeof buildRequest>> }[] = [];
   for (const row of rows as DesignRow[]) {

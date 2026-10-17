@@ -3,7 +3,7 @@ import { BRAND, composeEmail, normalizeTarget, targetKey, templateVars, unknownV
 import { deliver, smtpConfigured, smtpHost, smtpPort } from "../_shared/yontech-mail.ts";
 import { knownFor, maybeSource } from "../_shared/yontech-jobs.ts";
 import { buildSite, maquetteMailBlock, pickVariant, renderAll, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
-import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareMaquettes, releaseStale, savePages, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
+import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareCreations, prepareMaquettes, releaseStale, savePages, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
 
 // Point d'entrée unique de l'outil prospection.yontech.fr. Réservé aux
 // comptes Supabase Auth dont l'adresse figure dans le secret
@@ -73,7 +73,7 @@ async function maquetteTemplate(db: any) {
 }
 // deno-lint-ignore no-explicit-any
 type Rec = Record<string, any>;
-const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id,design_status,design_error";
+const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id,design_status,design_error,kind";
 
 function adminAllowed(address: string) {
   const list = (Deno.env.get("YONTECH_ADMIN_EMAILS") || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -164,7 +164,11 @@ Deno.serve(async (req) => {
           .map((f) => ({ ...(f.yontech_prospection_messages as Record<string, unknown>), sent_at: f.sent_at, kind: "followup", stage: f.stage }) as Recent),
       ].sort((a: Recent, b: Recent) => String(b.sent_at).localeCompare(String(a.sent_at))).slice(0, 8);
       return response(req, {
-        settings: s, templates: templates.data || [], counts, sentToday: today, capToday, status, missing,
+        settings: s, templates: await (async () => {
+          const { data: st } = await db.rpc("yontech_template_stats");
+          const by = new Map(((st || []) as Rec[]).map((x) => [x.template_id, { sent: Number(x.sent || 0), replied: Number(x.replied || 0) }]));
+          return (templates.data || []).map((t) => ({ ...t, stats: by.get(t.id) || { sent: 0, replied: 0 } }));
+        })(), counts, sentToday: today, capToday, status, missing,
         smtp: { configured: smtpConfigured(), host: smtpHost(), port: smtpPort() },
         search: { configured: !!Deno.env.get("YONTECH_SEARCH_API_KEY") },
         recent: recentAll, perDay, adminEmail: user.email,
@@ -246,8 +250,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === "templates.save") {
-      const kind = ["initial", "relance1", "relance2", "maquette"].includes(String(payload.kind)) ? String(payload.kind) : "initial";
-      const subject = kind === "initial" || kind === "maquette" ? text(payload.subject, 200) : (text(payload.subject, 200) || "Re : (objet du premier message)");
+      const kind = ["initial", "relance1", "relance2", "maquette", "maquette_creation", "relance_vue"].includes(String(payload.kind)) ? String(payload.kind) : "initial";
+      const isMaquette = kind === "maquette" || kind === "maquette_creation";
+      const subject = kind === "initial" || isMaquette ? text(payload.subject, 200) : (text(payload.subject, 200) || "Re : (objet du premier message)");
       // Public : toutes les entreprises, sans site internet (annuaire RGE) ou avec site.
       const audience = ["tous", "sanssite", "avecsite"].includes(String(payload.audience)) ? String(payload.audience) : "tous";
       // Campagne : « logiciel » (développement, applications) ou « site » (création et refonte de sites internet).
@@ -255,8 +260,9 @@ Deno.serve(async (req) => {
       const row = { name: text(payload.name, 120), subject, body: text(payload.body, 8000), active: payload.active !== false, kind, audience, campagne, updated_at: new Date().toISOString() };
       if (!row.name || !row.subject || !row.body) throw fail("Nom, objet et message sont obligatoires.");
       // Mail de prospection par maquette : {maquette} (aperçu visuel) et {lien} (adresse) en plus.
-      const unknown = unknownVariables(row.subject + "\n" + row.body).filter((v) => !(kind === "maquette" && ["maquette", "lien"].includes(v.toLowerCase())));
-      if (kind === "maquette" && !/\{maquette\}|\{lien\}/i.test(row.body)) throw fail("Ce mail doit contenir {maquette} (aperçu de la maquette) ou {lien} (son adresse).");
+      const unknown = unknownVariables(row.subject + "\n" + row.body).filter((v) => !((isMaquette || kind === "relance_vue") && ["maquette", "lien"].includes(v.toLowerCase())));
+      if (isMaquette && !/\{maquette\}|\{lien\}/i.test(row.body)) throw fail("Ce mail doit contenir {maquette} (aperçu de la maquette) ou {lien} (son adresse).");
+      if (kind === "relance_vue" && !/\{lien\}/i.test(row.body)) throw fail("La relance après visite doit contenir {lien} (adresse de la maquette).");
       if (unknown.length) throw fail(`Variable inconnue : {${unknown.join("}, {")}}.`);
       const template = payload.id
         ? check(await db.from("yontech_prospection_templates").update(row).eq("id", uuid(payload.id)).select("*").single())
@@ -417,9 +423,9 @@ Deno.serve(async (req) => {
     if (action === "mqp.state") {
       const ready = await maquetteDomainReady();
       const [settings, pending, sent] = await Promise.all([
-        db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_subject,maquette_body").eq("id", 1).single(),
+        db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_daily_creation,maquette_subject,maquette_body").eq("id", 1).single(),
         db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data,status,opened_at,sent_at)").eq("review", "a_valider").order("prepared_at").limit(100),
-        db.from("yontech_maquettes").select("id,slug,company,views,last_view_at,sent_at,review,data,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)").in("review", ["envoye"]).order("sent_at", { ascending: false }).limit(100),
+        db.from("yontech_maquettes").select("id,slug,company,views,last_view_at,sent_at,prepared_at,review,data,kind,view_followup_at,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)").in("review", ["envoye"]).order("sent_at", { ascending: false }).limit(100),
       ]);
       for (const r of [settings, pending, sent]) if (r.error) throw r.error;
       const midnight = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" }));
@@ -427,14 +433,16 @@ Deno.serve(async (req) => {
       const s = settings.data as Rec;
       const slim = (r: Rec) => ({ ...r, url: maquetteUrl(r.slug, ready), data: { accent: r.data?.accent, logo: r.data?.logo, image: r.data?.images?.[0] || "", tagline: r.data?.tagline, theme: r.data?.theme, city: r.data?.city, quality: r.data?.quality || null, pages: (r.data?.pages || []).map((pg: Rec) => ({ path: pg.path, label: pg.label })) } });
       const sentRows = (sent.data || []) as Rec[];
-      const preparedToday = ((pending.data || []) as Rec[]).concat(sentRows).filter((r) => r.prepared_at && new Date(r.prepared_at) >= new Date(Date.now() - (Date.now() - midnight.getTime()))).length;
+      const todayRows = ((pending.data || []) as Rec[]).concat(sentRows).filter((r) => r.prepared_at && new Date(r.prepared_at) >= new Date(Date.now() - (Date.now() - midnight.getTime())));
+      const preparedToday = todayRows.filter((r) => (r.kind || "refonte") === "refonte").length;
+      const preparedTodayCreation = todayRows.filter((r) => r.kind === "creation").length;
       return response(req, {
         domainReady: ready,
-        settings: { enabled: s.maquette_enabled, daily: s.maquette_daily, ...(await (async () => { const t = await maquetteTemplate(db); return { subject: t.subject, body: t.body, templates: ((await db.from("yontech_prospection_templates").select("id,name,active").eq("kind", "maquette")).data || []) }; })()) },
+        settings: { enabled: s.maquette_enabled, daily: s.maquette_daily, dailyCreation: s.maquette_daily_creation, ...(await (async () => { const t = await maquetteTemplate(db); return { subject: t.subject, body: t.body, templates: ((await db.from("yontech_prospection_templates").select("id,name,active,kind").in("kind", ["maquette", "maquette_creation"])).data || []) }; })()) },
         pending: ((pending.data || []) as Rec[]).map(slim),
         sent: sentRows.map(slim),
         stats: {
-          pending: (pending.data || []).length, sent: sentRows.length, preparedToday,
+          pending: (pending.data || []).length, sent: sentRows.length, preparedToday, preparedTodayCreation,
           opened: sentRows.filter((r) => r.yontech_prospection_messages?.opened_at).length,
           clicked: sentRows.filter((r) => r.yontech_prospection_messages?.site_clicked_at).length,
           viewed: sentRows.filter((r) => (r.views || 0) > 0).length,
@@ -446,6 +454,7 @@ Deno.serve(async (req) => {
       const patch: Rec = { updated_at: new Date().toISOString() };
       if ("enabled" in payload) patch.maquette_enabled = payload.enabled === true;
       if ("daily" in payload) patch.maquette_daily = integer(payload.daily, 0, 100);
+      if ("dailyCreation" in payload) patch.maquette_daily_creation = integer(payload.dailyCreation, 0, 200);
       if ("subject" in payload) patch.maquette_subject = text(payload.subject, 200) || null;
       if ("body" in payload) {
         const body = text(payload.body, 6000);
@@ -458,6 +467,8 @@ Deno.serve(async (req) => {
     if (action === "mqp.prepare") {
       // Un site par appel (limite de calcul d'une exécution) : l'outil enchaîne les appels.
       await releaseStale(db);
+      // Création (sans site) : pas de lecture de site, dans la limite du quota du jour.
+      if (payload.kind === "creation") return response(req, await prepareCreations(db, { max: 5 }));
       const result = await prepareMaquettes(db, { max: 1, budgetMs: 110_000, force: true });
       return response(req, result);
     }
@@ -505,7 +516,7 @@ Deno.serve(async (req) => {
       if (m.msg.status !== "sent") check(await db.rpc("yontech_prospection_finish", { target_id: m.msg.id, outcome: "sent", target_template_id: m.maq.template_id || null, target_subject: result.subject, target_body: result.body, target_message_id: result.messageId }));
       await db.from("yontech_prospection_messages").update({ data: { ...(m.msg.data || {}), maquette: m.maq.slug } }).eq("id", m.msg.id);
       const now = new Date().toISOString();
-      check(await db.from("yontech_maquettes").update({ review: "envoye", sent_at: now, emailed_at: now, email_to: m.msg.email, mail_subject: m.template.subject, mail_body: text(body ?? m.maq.mail_body, 6000) || m.maq.mail_body }).eq("id", id));
+      check(await db.from("yontech_maquettes").update({ review: "envoye", sent_at: now, emailed_at: now, mail_message_id: result.messageId, email_to: m.msg.email, mail_subject: m.template.subject, mail_body: text(body ?? m.maq.mail_body, 6000) || m.maq.mail_body }).eq("id", id));
       return { ok: true, to: m.msg.email };
     };
     if (action === "mqp.validate") {
