@@ -10,7 +10,35 @@ type ComposeBlock = NonNullable<ComposeInput["block"]>;
 export type SenderSettings = {
   sender_name: string; sender_email: string | null; reply_to: string | null;
   signature: string; footer_identity: string; video_url?: string | null;
+  // Boîtes supplémentaires (même nom d'expéditeur) ; mot de passe dans
+  // YONTECH_SMTP_PASSWORD_2 … _5. Une boîte sans mot de passe est ignorée.
+  sender_email_2?: string | null; sender_email_3?: string | null; sender_email_4?: string | null; sender_email_5?: string | null;
 };
+
+type Box = { address: string; user: string; pass: string };
+
+// Boîtes d'envoi utilisables : la principale, puis les supplémentaires configurées.
+export function senderBoxes(settings: SenderSettings): Box[] {
+  const s = settings as Record<string, unknown>;
+  const out: Box[] = [];
+  for (let i = 1; i <= 5; i++) {
+    const address = String((i === 1 ? s.sender_email : s[`sender_email_${i}`]) || "").trim();
+    const pass = Deno.env.get(`YONTECH_SMTP_PASSWORD${i === 1 ? "" : `_${i}`}`) || "";
+    if (address && pass) out.push({ address, pass, user: i === 1 ? Deno.env.get("YONTECH_SMTP_USER") || address : address });
+  }
+  return out;
+}
+
+// Un destinataire est toujours servi par la même boîte : ses relances restent
+// dans le même fil et l'envoi se répartit à parts égales entre les boîtes.
+function boxFor(settings: SenderSettings, recipient: string): Box {
+  const boxes = senderBoxes(settings);
+  if (!boxes.length) return { address: settings.sender_email || "", user: "", pass: "" };
+  let h = 0;
+  for (const ch of recipient.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return boxes[h % boxes.length];
+}
+const primaryBox = (settings: SenderSettings): Box => senderBoxes(settings)[0] || { address: settings.sender_email || "", user: "", pass: "" };
 export type MailTemplate = { id: string; subject: string; body: string };
 
 export function smtpConfigured() {
@@ -39,14 +67,14 @@ export function trackingBase() {
   return Deno.env.get("YONTECH_TRACKING_BASE") || `${functionsBase()}/yontech-prospection-track`;
 }
 
-function transport(settings: SenderSettings) {
-  const pass = Deno.env.get("YONTECH_SMTP_PASSWORD");
-  if (!pass || !settings.sender_email) {
+function transport(box: Box) {
+  const pass = box.pass;
+  if (!pass || !box.address) {
     throw Object.assign(new Error("Boîte d'envoi non configurée : adresse ou mot de passe SMTP manquant."), { code: "EAUTH" });
   }
   return nodemailer.createTransport({
     host: smtpHost(), port: smtpPort(), secure: true,
-    auth: { user: Deno.env.get("YONTECH_SMTP_USER") || settings.sender_email, pass },
+    auth: { user: box.user || box.address, pass },
     connectionTimeout: 20_000, greetingTimeout: 20_000, socketTimeout: 45_000,
   });
 }
@@ -77,29 +105,32 @@ export async function resolveVideoThumb(videoUrl: string): Promise<string> {
 export async function deliver(input: {
   settings: SenderSettings; template: MailTemplate; to: string; vars: Vars; token: string;
   trackingToken?: string; subjectPrefix?: string; inReplyTo?: string; source?: string;
-  block?: ComposeBlock;
+  block?: ComposeBlock; plain?: boolean;
 }): Promise<DeliveryResult> {
   const links = unsubscribeLinks(input.token);
-  const videoThumb = input.block ? "" : await resolveVideoThumb(input.settings.video_url || "");
+  const videoThumb = input.block || input.plain ? "" : await resolveVideoThumb(input.settings.video_url || "");
   const mail = composeEmail({
     subject: input.template.subject, body: input.template.body, signature: input.settings.signature,
     footerIdentity: input.settings.footer_identity, unsubscribeUrl: links.page, vars: input.vars,
     videoUrl: input.block ? "" : input.settings.video_url || "", videoThumb, source: input.source, block: input.block,
     tracking: input.trackingToken ? { base: trackingBase(), token: input.trackingToken } : undefined,
-    logoUrl: Deno.env.get("YONTECH_LOGO_URL") ?? BRAND.logo,
+    logoUrl: Deno.env.get("YONTECH_LOGO_URL") ?? BRAND.logo, plain: input.plain,
   });
   const subject = (input.subjectPrefix || "") + mail.subject;
-  const sender = input.settings.sender_email || "";
+  const box = boxFor(input.settings, input.to);
+  const sender = box.address;
+  // Réponses et désinscriptions par e-mail : toujours vers la boîte principale (lue par l'outil).
+  const primary = input.settings.reply_to || input.settings.sender_email || sender;
   const domain = sender.split("@")[1] || "yontech.fr";
   const messageId = `<${crypto.randomUUID()}@${domain}>`;
   try {
-    const info = await transport(input.settings).sendMail({
+    const info = await transport(box).sendMail({
       from: { name: input.settings.sender_name || BRAND.senderName, address: sender },
       to: input.to,
-      replyTo: input.settings.reply_to || undefined,
+      replyTo: primary !== sender ? primary : input.settings.reply_to || undefined,
       subject, text: mail.text, html: mail.html, messageId,
       headers: {
-        "List-Unsubscribe": `<${links.oneClick}>, <mailto:${sender}?subject=${encodeURIComponent("Désinscription")}>`,
+        "List-Unsubscribe": `<${links.oneClick}>, <mailto:${primary}?subject=${encodeURIComponent("Désinscription")}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         // Une relance s'affiche dans le fil du premier message chez le destinataire.
         ...(input.inReplyTo ? { "In-Reply-To": input.inReplyTo, "References": input.inReplyTo } : {}),
@@ -112,7 +143,7 @@ export async function deliver(input: {
     const e = error as { message?: string; response?: string };
     const outcome = classifySmtpError(error);
     return {
-      ok: false, outcome, error: String(e.response || e.message || error).slice(0, 500), subject, body: mail.text,
+      ok: false, outcome, error: ((senderBoxes(input.settings).length > 1 ? `[${sender}] ` : "") + String(e.response || e.message || error)).slice(0, 500), subject, body: mail.text,
       retrySeconds: outcome === "throttled" ? retryDelaySeconds(error) : undefined,
     };
   }
@@ -129,7 +160,7 @@ export async function alertAdmin(settings: SenderSettings, subject: string, reas
     `<p><a href="${BRAND.tool}" style="display:inline-block;background:${BRAND.accent};color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:9px">Ouvrir l'outil de prospection</a></p>` +
     `<p style="margin:22px 0 0;font-size:13px;color:#8a8ca0">Corrigez le réglage en cause puis cliquez sur « Démarrer l'automate ».</p></div>`;
   try {
-    await transport(settings).sendMail({
+    await transport(primaryBox(settings)).sendMail({
       from: { name: BRAND.name, address: settings.sender_email as string }, to, subject: `Prospection ${BRAND.name} : ${subject}`,
       text: `${subject}\n\n${reason}\n\n${BRAND.tool}`, html,
     });

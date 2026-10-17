@@ -164,7 +164,17 @@ export type ComposeInput = {
   block?: (tracking?: Tracking) => { html: string; text: string };
   // Origine de la fiche (« sirene » ou « rge ») : change la mention légale.
   source?: string;
+  // Premier contact : e-mail sobre (aucune image, aucun pixel, liens directs),
+  // bien mieux reçu par les filtres anti-spam. Les relances gardent le suivi.
+  plain?: boolean;
 };
+
+function plainVideo(url: string) {
+  return {
+    text: `▶ Regarder la vidéo (1 minute) : ${url}`,
+    html: `<p style="margin:0 0 16px"><a href="${htmlEscape(url)}" style="color:${BRAND.accent};font-weight:bold">▶ Regarder la vidéo (1 minute)</a></p>`,
+  };
+}
 
 export function youtubeThumb(url: string, size: "maxresdefault" | "hqdefault" = "hqdefault") {
   const id = youtubeId(url);
@@ -227,8 +237,9 @@ export function composeEmail(input: ComposeInput) {
   const parts = String(input.body ?? "").replace(/\r\n/g, "\n").split(marker);
   const before = tidy(parts[0] || ""), after = tidy(parts.slice(1).join("\n"));
   const body = [before, after].filter(Boolean).join("\n\n");
-  const tracking = input.tracking;
-  const video = input.block ? input.block(tracking) : input.videoUrl ? videoBlock(input.videoUrl, tracking, input.videoThumb) : null;
+  const plain = input.plain === true && !input.block;
+  const tracking = plain ? undefined : input.tracking;
+  const video = input.block ? input.block(tracking) : input.videoUrl ? (plain ? plainVideo(input.videoUrl) : videoBlock(input.videoUrl, tracking, input.videoThumb)) : null;
   const signature = String(input.signature ?? "").replace(/\r\n/g, "\n").trim();
   const company = input.vars.entreprise || "votre entreprise";
   const notice = `${dataNotice(company, input.source)} Pour ne plus recevoir de message de notre part : ${input.unsubscribeUrl}`;
@@ -240,7 +251,7 @@ export function composeEmail(input: ComposeInput) {
     ? `<img src="${htmlEscape(`${tracking.base}?t=${encodeURIComponent(tracking.token)}&k=open`)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">` +
       `<a href="${htmlEscape(`${tracking.base}?t=${encodeURIComponent(tracking.token)}&k=trap`)}" style="display:none;font-size:0;line-height:0;color:transparent" aria-hidden="true" tabindex="-1">&zwnj;</a>`
     : "";
-  const logoUrl = input.logoUrl === undefined ? BRAND.logo : input.logoUrl;
+  const logoUrl = plain ? "" : input.logoUrl === undefined ? BRAND.logo : input.logoUrl;
   const html = `<div style="font:15px/1.6 Arial,Helvetica,sans-serif;color:#1f2030;max-width:640px">${textToHtml(before, tracking)}` +
     (video ? video.html : "") + (after ? textToHtml(after, tracking) : "") + signatureHtml(signature, tracking, logoUrl) +
     `<p style="margin:28px 0 0;padding-top:12px;border-top:1px solid #e5e5ef;font-size:12px;line-height:1.5;color:#8a8ca0">` +
