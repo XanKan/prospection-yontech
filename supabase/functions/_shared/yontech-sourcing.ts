@@ -68,6 +68,9 @@ export async function runSourcing(options: {
   enqueue: (items: QueueItem[]) => Promise<number>;
   // Mémorise les entreprises examinées (avec ou sans adresse) pour ne pas les refaire.
   scanned: (items: { siren: string; site: string; email: string; how: string }[]) => Promise<void>;
+  // Position enregistrée à chaque page, avant le traitement : si l'exécution est
+  // coupée (limite de calcul), le passage suivant ne rejoue pas la même page.
+  progress?: (cursor: Cursor) => Promise<void>;
 }) {
   const target = normalizeTarget(options.target);
   const key = targetKey(target);
@@ -105,6 +108,7 @@ export async function runSourcing(options: {
           if (!rge.histo && target.sansSiteHisto) { rge.histo = true; rge.i = 0; } else { rge.done = true; rr.done = true; }
         }
       } else rge.page++;
+      await options.progress?.(cursor);
       // Une entreprise par SIREN (plusieurs qualifications par entreprise) et pas déjà connue.
       const bySiren = new Map<string, typeof page.lines[number]>();
       for (const line of page.lines) if (!bySiren.has(line.siren)) bySiren.set(line.siren, line);
@@ -172,6 +176,7 @@ export async function runSourcing(options: {
     const lastPage = Math.min(Number(data.total_pages || 0), 400);
     cursor.pages[String(index)] = page + 1;
     if (!data.results?.length || page >= lastPage) { doneSet.add(index); cursor.done.push(index); delete cursor.pages[String(index)]; }
+    await options.progress?.(cursor);
 
     // L'API filtre sur tous les établissements : seul le siège compte ici, et
     // seule l'activité demandée (une division NAF couvre tous ses codes).

@@ -19,5 +19,5 @@ Deno.serve(async (req) => {
   const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: allowed } = await db.rpc("yontech_prospection_check_cron_secret", { candidate: req.headers.get("x-prospection-cron") || "" });
   if (allowed !== true) return json({ error: "Accès refusé" }, 403);
-  try { return json({ sourcing: await maybeSource(db, false, 100_000) }); } catch (error) { return json({ sourcing: { state: "crash", error: String((error as Error)?.message || error) } }); }
+  try { return json({ sourcing: await maybeSource(db, false, 60_000) }); } catch (error) { return json({ sourcing: { state: "crash", error: String((error as Error)?.message || error) } }); }
 });

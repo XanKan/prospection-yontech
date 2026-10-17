@@ -123,6 +123,7 @@ export async function maybeSource(db: SupabaseClient, force = false, budgetMs = 
     requireFirstName: s.require_first_name === true, deadline: Date.now() + budgetMs,
     searchApiKey: Deno.env.get("YONTECH_SEARCH_API_KEY") || undefined,
     skipRge: siteFull, skipWeb: logicielFull,
+    progress: async (c) => { await db.from("yontech_prospection_settings").update({ sourcing_cursor: c }).eq("id", 1); },
     known: (sirens, emails) => knownFor(db, sirens, emails),
     enqueue: async (items) => {
       const { data, error: enqueueError } = await db.rpc("yontech_prospection_enqueue", { items, target_origin: "autopilote" });
