@@ -73,7 +73,7 @@ async function maquetteTemplate(db: any) {
 }
 // deno-lint-ignore no-explicit-any
 type Rec = Record<string, any>;
-const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id";
+const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id,design_status,design_error";
 
 function adminAllowed(address: string) {
   const list = (Deno.env.get("YONTECH_ADMIN_EMAILS") || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -479,6 +479,7 @@ Deno.serve(async (req) => {
       const settings = check(await db.from("yontech_prospection_settings").select("*").eq("id", 1).single()) as Rec;
       const m = await mqpMail(id, subject, body);
       if (m.maq.review !== "a_valider") throw fail("Ce mail a déjà été traité.");
+      if (["attente", "en_cours"].includes(String(m.maq.design_status || ""))) throw fail("Le site sur mesure de " + (m.maq.company || "cette maquette") + " est encore en cours de création.");
       if (!m.msg?.email) throw fail("Prospect introuvable.");
       if (m.maq.status !== "en_ligne") throw fail("La maquette est retirée : remettez-la en ligne avant d'envoyer.");
       const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", m.msg.email).maybeSingle();
@@ -572,7 +573,7 @@ Deno.serve(async (req) => {
         ? (await db.from("yontech_maquettes").select("id,slug").eq("message_id", messageId).limit(1).maybeSingle()).data
         : (await db.from("yontech_maquettes").select("id,slug").eq("host", built.data.host).is("message_id", null).limit(1).maybeSingle()).data;
       const slug = existing?.slug || await uniqueSlug(db, slugify(built.data.name));
-      const row = { slug, message_id: messageId, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: built.html, status: "en_ligne", updated_at: new Date().toISOString() };
+      const row = { slug, message_id: messageId, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: built.html, status: "en_ligne", design_status: "attente", design_batch: null, design_attempts: 0, updated_at: new Date().toISOString() };
       const saved = (existing
         ? check(await db.from("yontech_maquettes").update(row).eq("id", existing.id).select(MAQUETTE_COLUMNS).single())
         : check(await db.from("yontech_maquettes").insert(row).select(MAQUETTE_COLUMNS).single())) as Rec;
@@ -597,7 +598,7 @@ Deno.serve(async (req) => {
       if ("about" in v) data.about = text(v.about, 1600).split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).slice(0, 3);
       if ("services" in v) data.services = text(v.services, 2000).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6).map((l) => { const [t, ...rest] = l.split(/\s*:\s*/); return { title: text(t, 70), text: text(rest.join(" : "), 240) }; });
       const all = renderAll(data);
-      const saved = check(await db.from("yontech_maquettes").update({ data, company: data.name, html: all.home, updated_at: new Date().toISOString() }).eq("id", row.id).select(MAQUETTE_COLUMNS + ",html").single()) as Rec;
+      const saved = check(await db.from("yontech_maquettes").update({ data, company: data.name, html: all.home, design_status: "attente", design_batch: null, design_attempts: 0, updated_at: new Date().toISOString() }).eq("id", row.id).select(MAQUETTE_COLUMNS + ",html").single()) as Rec;
       await savePages(db, row.id, all.pages);
       return response(req, { maquette: { ...saved, url: maquetteUrl(saved.slug, await maquetteDomainReady()) } });
     }

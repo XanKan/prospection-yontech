@@ -1141,6 +1141,13 @@ function mqpSentLine(r){
   return '<li><div class="grow"><b>' + esc(r.company) + '</b><span>' + esc(m.email || "") + " · envoyé le " + dateFr(r.sent_at) + " à " + timeFr(r.sent_at) + (r.views ? " · " + r.views + " vue(s)" : "") + '</span></div>' + tags +
     '<a class="b b-out b-xs" href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">Maquette ↗</a></li>';
 }
+function designBusy(r){ return r.design_status === "attente" || r.design_status === "en_cours"; }
+function designLine(r){
+  if (designBusy(r)) return '<div class="meta" style="color:#b96c14"><b>Site sur mesure en cours de création</b> par l\'IA (quelques minutes à une heure). La version actuelle est provisoire.</div>';
+  if (r.design_status === "ok") return '<div class="meta" style="color:var(--ok)"><b>Site sur mesure</b> dessiné par l\'IA.</div>';
+  if (r.design_status === "echec") return '<div class="meta" style="color:#b96c14"><b>Site sur mesure non obtenu</b>' + (r.design_error ? " (" + esc(r.design_error) + ")" : "") + ' : version gabarit conservée.</div>';
+  return "";
+}
 function renderMqp(){
   if (!MQP) return;
   $("pillMqp").hidden = !(MQP.pending || []).length; $("pillMqp").textContent = (MQP.pending || []).length;
@@ -1167,12 +1174,13 @@ function renderMqp(){
       '<div class="mqp-main"><div class="who">' + esc(m.company || r.company) + '</div>' +
         (m.status === "sent" ? '<div class="meta" style="color:var(--ok)"><b>Déjà contacté</b> par le mail classique le ' + dateFr(m.sent_at) + (m.opened_at ? ", ouvert le " + dateFr(m.opened_at) + " à " + timeFr(m.opened_at) : "") + ' : la maquette sert de relance.</div>' : "") +
         '<div class="meta">' + esc(m.email || "") + (d.city ? " · " + esc(d.city) : "") + " · " + (1 + (d.pages || []).length) + ' page(s) · site actuel <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' + esc(r.host) + '</a> · maquette <a href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">' + esc(r.url.replace(/^https?:\/\//, "")) + '</a></div>' +
+        designLine(r) +
         (d.quality && d.quality.warnings && d.quality.warnings.length ? '<div class="meta" style="color:#b96c14"><b>À vérifier :</b> ' + esc(d.quality.warnings.join(" · ")) + '</div>' : "") +
         '<input class="inp" data-f="subject" maxlength="200" value="' + esc(r.mail_subject || s.subject) + '" aria-label="Objet">' +
         '<details><summary>Modifier le texte du mail</summary><textarea class="inp" data-f="body" rows="12" maxlength="6000" style="margin-top:8px">' + esc(r.mail_body || s.body) + '</textarea></details>' +
       '</div>' +
       '<div class="mqp-acts">' +
-        '<button type="button" class="b b-main b-sm" data-mqp="send">Valider et envoyer</button>' +
+        (designBusy(r) ? '<button type="button" class="b b-main b-sm" disabled title="Le site sur mesure est en cours de création">Site en création…</button>' : '<button type="button" class="b b-main b-sm" data-mqp="send">Valider et envoyer</button>') +
         '<button type="button" class="b b-out b-sm" data-mqp="preview">Voir le mail</button>' +
         '<button type="button" class="b b-out b-sm" data-mqp="fix">Corriger la maquette</button>' +
         '<button type="button" class="b b-out b-sm" data-mqp="del">Supprimer</button>' +
@@ -1230,8 +1238,9 @@ $("v-mqp").addEventListener("click", async ev => {
   }
 });
 $("bMqpAll").addEventListener("click", async () => {
-  const items = [...document.querySelectorAll("#mqpList .mqp-item")];
-  if (!items.length) return;
+  // Les maquettes dont le site sur mesure est encore en création attendent.
+  const items = [...document.querySelectorAll("#mqpList .mqp-item")].filter(it => it.querySelector('[data-mqp="send"]'));
+  if (!items.length) { toast("Aucun mail prêt : les sites sur mesure sont encore en création.", 6000); return; }
   if (!confirm("Envoyer les " + items.length + " mails en attente, tels qu'ils sont enregistrés ?\n\nVérifiez d'abord les maquettes : un mail envoyé ne se rattrape pas.")) return;
   // Les objets et textes modifiés à l'écran sont enregistrés avant l'envoi groupé.
   busy($("bMqpAll"), true, "Envoi…");

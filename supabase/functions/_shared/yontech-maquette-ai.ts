@@ -34,7 +34,7 @@ const cut = (v: unknown, n: number) => {
 const arr = <T>(v: unknown, n: number, f: (x: Record<string, unknown>) => T | null): T[] =>
   (Array.isArray(v) ? v : []).slice(0, n).map((x) => (x && typeof x === "object" ? f(x as Record<string, unknown>) : null)).filter(Boolean) as T[];
 
-function sourceText(d: SiteData, extra: { paragraphs: string[]; pages: { label: string; blocks: Block[] }[]; imageNames: string[] }) {
+export function sourceText(d: SiteData, extra: { paragraphs: string[]; pages: { label: string; blocks: Block[] }[]; imageNames: string[] }) {
   const lines: string[] = [];
   lines.push(`ENTREPRISE : ${d.name}`, `VILLE : ${d.city} ${d.cp || ""}`, `ADRESSE : ${d.address}`, `TÉLÉPHONE : ${d.phone}`);
   if (d.hours.length) lines.push(`HORAIRES : ${d.hours.join(" ; ")}`);

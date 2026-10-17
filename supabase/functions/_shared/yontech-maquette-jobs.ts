@@ -165,7 +165,7 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     const tpl = (tpls || []).length ? tpls![Math.floor(Math.random() * tpls!.length)] : null;
     const { data: inserted, error } = await db.from("yontech_maquettes").insert({
       slug, message_id: cand.id, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: built.html,
-      status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(),
+      status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(), design_status: "attente",
       template_id: tpl?.id || null, mail_subject: tpl?.subject || settings.maquette_subject || MAQUETTE_SUBJECT, mail_body: tpl?.body || settings.maquette_body || MAQUETTE_BODY,
     }).select("id").single();
     if (!error && inserted) await savePages(db, inserted.id, built.pages);
