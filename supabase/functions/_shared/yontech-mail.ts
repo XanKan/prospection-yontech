@@ -102,11 +102,41 @@ export async function resolveVideoThumb(videoUrl: string): Promise<string> {
   return url;
 }
 
+// Vérification de l'adresse avant l'envoi : un domaine qui n'existe pas ou ne
+// reçoit pas de courrier (ni MX ni adresse IP) ferait un rebond, qui abîme la
+// réputation de la boîte. En cas de doute (DNS lent, erreur), on envoie.
+const COMMON_DOMAINS = new Set(["gmail.com", "hotmail.fr", "hotmail.com", "outlook.fr", "outlook.com", "live.fr", "live.com", "yahoo.fr", "yahoo.com",
+  "orange.fr", "wanadoo.fr", "free.fr", "sfr.fr", "neuf.fr", "laposte.net", "icloud.com", "me.com", "bbox.fr", "aol.com", "gmx.fr", "numericable.fr"]);
+const domainCache = new Map<string, boolean>();
+async function dnsJson(name: string, type: string) {
+  const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${type}`, { headers: { Accept: "application/dns-json" }, signal: AbortSignal.timeout(4000) });
+  return await r.json() as { Status?: number; Answer?: { type: number; data: string }[] };
+}
+export async function mailDomainOk(email: string) {
+  const domain = String(email || "").split("@")[1]?.trim().toLowerCase() || "";
+  if (!domain || !domain.includes(".")) return false;
+  if (COMMON_DOMAINS.has(domain)) return true;
+  if (domainCache.has(domain)) return domainCache.get(domain)!;
+  let ok = true;
+  try {
+    const mx = await dnsJson(domain, "MX");
+    const records = (mx.Answer || []).filter((a) => a.type === 15);
+    if (mx.Status === 3) ok = false; // le domaine n'existe pas
+    else if (records.length) ok = !records.every((a) => /^0\s+\.?$/.test(String(a.data).trim())); // « MX nul » : refuse tout courrier
+    else if (mx.Status === 0) { const a = await dnsJson(domain, "A"); ok = (a.Answer || []).some((x) => x.type === 1); }
+  } catch { ok = true; }
+  domainCache.set(domain, ok);
+  return ok;
+}
+
 export async function deliver(input: {
   settings: SenderSettings; template: MailTemplate; to: string; vars: Vars; token: string;
   trackingToken?: string; subjectPrefix?: string; inReplyTo?: string; source?: string;
   block?: ComposeBlock; plain?: boolean;
 }): Promise<DeliveryResult> {
+  if (!(await mailDomainOk(input.to))) {
+    return { ok: false, outcome: "recipient_rejected", error: "Domaine sans messagerie : adresse écartée avant l'envoi.", subject: input.template.subject, body: "" };
+  }
   const links = unsubscribeLinks(input.token);
   const videoThumb = input.block || input.plain ? "" : await resolveVideoThumb(input.settings.video_url || "");
   const mail = composeEmail({
@@ -147,6 +177,15 @@ export async function deliver(input: {
       retrySeconds: outcome === "throttled" ? retryDelaySeconds(error) : undefined,
     };
   }
+}
+
+// Message interne à l'équipe (récapitulatif) : envoyé depuis la boîte
+// principale vers l'adresse de réponse (ou la boîte principale).
+export async function mailTeam(settings: SenderSettings, subject: string, html: string, text: string) {
+  const to = settings.reply_to || settings.sender_email;
+  if (!to) throw new Error("Aucune adresse d'équipe configurée.");
+  await transport(primaryBox(settings)).sendMail({ from: { name: BRAND.name, address: settings.sender_email as string }, to, subject, text, html });
+  return to;
 }
 
 // Alerte à l'administrateur (automate en pause) : envoyée depuis la même
