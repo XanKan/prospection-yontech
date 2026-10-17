@@ -420,7 +420,6 @@
     <nav class="side-nav">
       <button class="nav-b on" data-view="auto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg><span class="t">Automate</span></button>
       <button class="nav-b" data-view="mqp"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/><path d="M15 17l2 2 4-4"/></svg><span class="t">Prospection maquette</span><span class="pill num" id="pillMqp" hidden>0</span></button>
-      <button class="nav-b" data-view="maq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg><span class="t">Maquettes</span><span class="pill" style="background:var(--warn-soft);color:#8a5212">test</span></button>
       <div class="nav-sep">Paramètres</div>
       <button class="nav-b" data-view="target"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="t">Ciblage</span></button>
       <button class="nav-b" data-view="tpl"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg><span class="t">Messages</span></button>
@@ -633,11 +632,11 @@
             <div class="run" style="margin-top:12px"><button type="submit" class="b b-main" id="bMqpSave">Enregistrer</button></div>
           </div>
         </form>
-      </section>
+        <details id="mqManual" style="margin-top:20px">
+          <summary style="cursor:pointer;font-weight:700;padding:10px 0">Créer ou corriger une maquette à la main</summary>
+          <p class="note" style="margin:4px 0 12px">Pour un prospect précis ou une adresse de site au choix, corriger une maquette (téléphone, couleurs, textes) ou vous envoyer un mail de test.</p>
 
-      <!-- ==================== MAQUETTES (refonte, mode test) ==================== -->
-      <section class="view" id="v-maq">
-        <div class="banner info"><div class="grow"><b>Mode test.</b> L'outil refait le site d'un prospect à partir de ses textes et de ses photos, et le met en ligne sur <b>nom.yontech.fr</b>. L'e-mail de présentation ne part que vers vos propres adresses, jamais vers le prospect.</div></div>
+        
         <div id="mqDomain"></div>
         <div class="card">
           <div class="card-h"><h2>Nouvelle maquette</h2><span class="sub">5 à 20 secondes par site</span></div>
@@ -700,7 +699,11 @@
             <p class="note" id="mqEmpty" hidden style="padding:10px 0">Aucune maquette pour l'instant.</p>
           </div>
         </div>
+      
+        </details>
       </section>
+
+
 
       <section class="view" id="v-tpl">
         <div class="tpl-wrap">
@@ -1132,9 +1135,10 @@ function showView(v){
   if (v === "settings") fillSettings();
   if (v === "auto") loadState().catch(() => {});
   if (v === "mqp") loadMqp().catch(e => toast(e.message || "Chargement impossible."));
-  if (v === "maq") loadMaquettes().catch(e => toast(e.message || "Chargement des maquettes impossible."));
 }
 document.querySelectorAll(".nav-b").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
+// Bloc « Créer ou corriger une maquette à la main » : chargé à la première ouverture.
+$("mqManual").addEventListener("toggle", () => { if ($("mqManual").open) loadMaquettes().catch(e => toast(e.message || "Chargement des maquettes impossible.")); });
 document.addEventListener("click", ev => {
   const g = ev.target.closest("[data-go]");
   if (g){ ev.preventDefault(); showView(g.getAttribute("data-go")); }
@@ -1246,8 +1250,8 @@ $("v-mqp").addEventListener("click", async ev => {
     return;
   }
   if (kind === "fix"){
-    showView("maq");
-    try { await mqOpenById(id); } catch(e){ toast(e.message || "Ouverture impossible."); }
+    $("mqManual").open = true;
+    try { await loadMaquettes(); await mqOpenById(id); $("mqManual").scrollIntoView({ behavior: "smooth", block: "start" }); } catch(e){ toast(e.message || "Ouverture impossible."); }
     return;
   }
   if (kind === "del"){
