@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { refreshRender, renderIsCurrent } from "../_shared/yontech-maquette-refresh.ts";
+import { hardenDesignHtml } from "../_shared/yontech-maquette-safe.ts";
 
 // Sert une maquette de refonte par son slug et sa page (GET ?slug=dupont-menuiserie&path=/volets).
 // Public : appelée par le Worker Cloudflare de *.yontech.fr et par la page
@@ -42,5 +43,7 @@ Deno.serve(async (req) => {
     const visitor = [...new Uint8Array(digest)].slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("");
     await db.rpc("yontech_maquette_view", { target_slug: slug, target_path: path, target_visitor: visitor });
   }
+  // Sites sur mesure plus anciens : garde-fous de mise en page ajoutés au vol.
+  if (data.html.includes('name="yt-design"')) data.html = hardenDesignHtml(data.html);
   return new Response(data.html, { headers: headers() });
 });

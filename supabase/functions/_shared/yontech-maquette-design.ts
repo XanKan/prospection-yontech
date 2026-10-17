@@ -2,6 +2,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { sourceText } from "./yontech-maquette-ai.ts";
 import { creationBrief } from "./yontech-maquette-creation.ts";
+import { hardenDesignHtml } from "./yontech-maquette-safe.ts";
 import { px } from "./yontech-maquette-render.ts";
 import type { SiteData } from "./yontech-maquette.ts";
 
@@ -43,7 +44,7 @@ Règles absolues sur le contenu :
 - Images : uniquement les URL fournies, à l'identique (balises <img> ou background-image). Tu les as vues : choisis chacune pour ce qu'elle montre, ne mets jamais une photo à un endroit où elle ne correspond pas au texte, n'utilise pas une photo floue, sombre ou hors sujet, et n'utilise jamais deux fois la même. Le logo va dans l'en-tête, à sa taille lisible, sans monogramme inventé à côté. Moins de photos bien choisies vaut mieux que des photos mal placées.
 - Orthographe et accords irréprochables. Pas d'emoji.
 
-Mise en page : marges latérales confortables à toutes les largeurs (jamais de texte collé au bord de l'écran), contenu centré dans une largeur maximale cohérente, rien qui déborde horizontalement sur téléphone. Le coin inférieur droit de l'écran est réservé (petit bandeau ajouté ensuite) : n'y place pas d'élément fixe.
+Mise en page : marges latérales confortables à toutes les largeurs (jamais de texte collé au bord de l'écran), contenu centré dans une largeur maximale cohérente, rien qui déborde horizontalement sur téléphone. Aucun texte ne doit jamais dépasser de son bloc ni être coupé : pas de hauteur fixe sur un bloc qui contient du texte, min-width:0 sur les enfants de grilles et de flex, tailles de titres en clamp() qui tiennent sur un écran de 360 px (mots longs comme « électricité » ou « menuiseries » compris), boutons et étiquettes qui passent à la ligne si besoin, numéros de téléphone et e-mails qui ne débordent pas. Le coin inférieur droit de l'écran est réservé (petit bandeau ajouté ensuite) : n'y place pas d'élément fixe.
 
 Ressources : polices Google Fonts via <link> (pas d'autre ressource externe, aucun script externe, aucune image externe hors liste). Icônes en SVG en ligne si besoin. Une carte Google Maps est permise seulement avec l'adresse fournie, en <iframe src="https://maps.google.com/maps?q=ADRESSE&output=embed">. Un formulaire de contact est permis (il ne sera pas envoyé).
 
@@ -174,7 +175,7 @@ export function finalizeHtml(raw: string, d: SiteData, allowed: string[]): { htm
   html = html.replace(/<head([^>]*)>/i, `<head$1><meta name="robots" content="noindex,nofollow"><meta name="yt-design" content="ia">`);
   const bar = `<div id="yt-badge" style="position:fixed;right:10px;bottom:10px;z-index:2147483000;display:flex;gap:8px;align-items:center;padding:6px 6px 6px 10px;border-radius:8px;background:rgba(17,17,17,.82);color:#fff;font:600 11px/1.3 system-ui,-apple-system,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.2);max-width:calc(100vw - 20px)"><span>Maquette Yontech pour ${esc(d.name)}</span>${d.source ? `<a href="${esc(d.source)}" target="_blank" rel="noopener nofollow" style="color:#fff;opacity:.75;text-decoration:underline;white-space:nowrap">Site actuel</a>` : ""}<button type="button" aria-label="Masquer" onclick="this.parentNode.remove()" style="all:unset;cursor:pointer;padding:2px 6px;opacity:.7;font-size:14px;line-height:1">×</button></div>`;
   html = /<body[^>]*>/i.test(html) ? html.replace(/<body([^>]*)>/i, `<body$1>${bar}`) : html.replace(/<\/html>/i, `${bar}</html>`);
-  return { html, direction };
+  return { html: hardenDesignHtml(html), direction };
 }
 
 // ---------- soumission et récupération ----------
