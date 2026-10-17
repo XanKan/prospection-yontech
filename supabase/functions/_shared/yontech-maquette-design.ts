@@ -186,7 +186,7 @@ export async function submitDesigns(db: SupabaseClient, max = 4) {
   const built: { row: DesignRow; req: Awaited<ReturnType<typeof buildRequest>> }[] = [];
   for (const row of rows as DesignRow[]) {
     try { built.push({ row, req: await buildRequest(row) }); }
-    catch (e) { await db.from("yontech_maquettes").update({ design_status: "echec", design_error: "préparation : " + (e as Error).message.slice(0, 150) }).eq("id", row.id); }
+    catch (e) { await giveUp(db, row.id, "préparation : " + (e as Error).message.slice(0, 150)); }
   }
   if (!built.length) return { submitted: 0 };
   const batch = await ai.messages.batches.create({ requests: built.map((b) => ({ custom_id: b.req.custom_id, params: b.req.params })) });
@@ -197,6 +197,20 @@ export async function submitDesigns(db: SupabaseClient, max = 4) {
     }).eq("id", b.row.id);
   }
   return { submitted: built.length, batch: batch.id };
+}
+
+// Pas de site sur mesure après deux essais : rien d'envoyable. Une maquette pas
+// encore envoyée est supprimée et son prospect rendu au circuit normal ; une
+// maquette déjà envoyée garde sa version actuelle.
+async function giveUp(db: SupabaseClient, id: string, why: string) {
+  const { data: m } = await db.from("yontech_maquettes").select("id,review,message_id").eq("id", id).maybeSingle();
+  if (!m) return;
+  if (m.review === "envoye") { await db.from("yontech_maquettes").update({ design_status: "echec", design_batch: null, design_error: why.slice(0, 200) }).eq("id", id); return; }
+  if (m.message_id) {
+    const { data: msg } = await db.from("yontech_prospection_messages").select("data,status").eq("id", m.message_id).maybeSingle();
+    await db.from("yontech_prospection_messages").update({ ...(msg?.status === "maquette" ? { status: "queued" } : {}), data: { ...(msg?.data || {}), maquette_essai: "site sur mesure non obtenu" } }).eq("id", m.message_id);
+  }
+  await db.from("yontech_maquettes").delete().eq("id", id);
 }
 
 export async function collectDesigns(db: SupabaseClient) {
@@ -214,7 +228,8 @@ export async function collectDesigns(db: SupabaseClient) {
       const retry = async (why: string) => {
         failed++;
         const again = (m.design_attempts || 0) < MAX_ATTEMPTS;
-        await db.from("yontech_maquettes").update({ design_status: again ? "attente" : "echec", design_batch: null, design_error: why.slice(0, 200) }).eq("id", m.id);
+        if (again) { await db.from("yontech_maquettes").update({ design_status: "attente", design_batch: null, design_error: why.slice(0, 200) }).eq("id", m.id); return; }
+        await giveUp(db, m.id, why);
       };
       if (result.result.type !== "succeeded") { await retry(`demande ${result.result.type}`); continue; }
       const msg = result.result.message;

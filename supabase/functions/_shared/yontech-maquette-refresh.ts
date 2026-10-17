@@ -21,7 +21,7 @@ export async function refreshRender(db: SupabaseClient, row: { id: string; data:
 }
 
 export async function refreshStale(db: SupabaseClient, limit = 15) {
-  const { data, error } = await db.from("yontech_maquettes").select("id,data").not("data", "is", null).or("design_status.is.null,design_status.neq.ok").not("html", "like", `%${MARK}%`).not("html", "like", "%yt-design%").limit(limit);
+  const { data, error } = await db.from("yontech_maquettes").select("id,data").not("data", "is", null).neq("kind", "creation").or("design_status.is.null,design_status.neq.ok").not("html", "like", `%${MARK}%`).not("html", "like", "%yt-design%").limit(limit);
   if (error) throw error;
   let done = 0;
   for (const row of data || []) {

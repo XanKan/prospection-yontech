@@ -492,6 +492,7 @@ Deno.serve(async (req) => {
       const m = await mqpMail(id, subject, body);
       if (m.maq.review !== "a_valider") throw fail("Ce mail a déjà été traité.");
       if (["attente", "en_cours"].includes(String(m.maq.design_status || ""))) throw fail("Le site sur mesure de " + (m.maq.company || "cette maquette") + " est encore en cours de création.");
+      if (m.maq.design_status !== "ok") throw fail("Pas de site sur mesure pour " + (m.maq.company || "cette maquette") + " : elle ne peut pas être envoyée.");
       if (!m.msg?.email) throw fail("Prospect introuvable.");
       if (m.maq.status !== "en_ligne") throw fail("La maquette est retirée : remettez-la en ligne avant d'envoyer.");
       const { data: banned } = await db.from("yontech_prospection_suppressions").select("email").eq("email", m.msg.email).maybeSingle();

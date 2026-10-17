@@ -199,7 +199,7 @@ Répondez simplement « ok » et nous mettons votre site en ligne avec vos élé
 
 Bien cordialement,`;
 
-const placeholder = (name: string) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${name.replace(/[<>&"]/g, "")}</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;font:600 18px system-ui,sans-serif;color:#333">Site en préparation</body></html>`;
+export const placeholder = (name: string) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${name.replace(/[<>&"]/g, "")}</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;font:600 18px system-ui,sans-serif;color:#333">Site en préparation</body></html>`;
 
 // Maquettes « création » : entreprises sans site, données publiques seulement,
 // site dessiné par Claude (aucune lecture de site : plusieurs par passage).
