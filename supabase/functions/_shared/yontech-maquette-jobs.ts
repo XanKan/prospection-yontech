@@ -2,6 +2,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { buildSite, RESERVED_SLUGS, slugify } from "./yontech-maquette.ts";
 import { creationData } from "./yontech-maquette-creation.ts";
 import { checkAddress } from "./yontech-mail.ts";
+import { fillFromLibrary } from "./yontech-maquette-templates.ts";
 
 // Prospection par maquette : chaque jour, l'outil prépare un nombre fixe de
 // prospects de la campagne « sites » qui ont déjà un site (20 par défaut) :
@@ -166,16 +167,23 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
       await release(built.error);
       continue;
     }
+    // IA coupée : maquette remplie depuis la bibliothèque de modèles (sans frais), prête aussitôt.
+    let lib: Awaited<ReturnType<typeof fillFromLibrary>> = null;
+    if (settings.design_ai === false) {
+      lib = await fillFromLibrary(db, built.data, "refonte", String(cand.data?.naf || ""));
+      if (!lib) { failed++; errors.push(`${cand.company} : aucun modèle compatible`); await release("aucun modèle compatible"); continue; }
+    }
     const slug = await uniqueSlug(db, slugify(built.data.name));
     // Mail : un des modèles actifs de type « maquette » (écran Messages), au hasard.
     const { data: tpls } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("kind", "maquette").eq("active", true);
     const tpl = (tpls || []).length ? tpls![Math.floor(Math.random() * tpls!.length)] : null;
     const { data: inserted, error } = await db.from("yontech_maquettes").insert({
-      slug, message_id: cand.id, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: built.html,
-      status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(), design_status: "attente",
+      slug, message_id: cand.id, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: lib ? lib.html : built.html,
+      status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(),
+      ...(lib ? { design_status: "ok", design_direction: lib.direction, design_at: new Date().toISOString(), design_images: lib.images } : { design_status: "attente" }),
       template_id: tpl?.id || null, mail_subject: tpl?.subject || settings.maquette_subject || MAQUETTE_SUBJECT, mail_body: tpl?.body || settings.maquette_body || MAQUETTE_BODY,
     }).select("id").single();
-    if (!error && inserted) await savePages(db, inserted.id, built.pages);
+    if (!error && inserted && !lib) await savePages(db, inserted.id, built.pages);
     if (error) {
       failed++; errors.push(`${cand.company} : ${error.message}`);
       await release("erreur d'enregistrement");
@@ -208,7 +216,7 @@ export const placeholder = (name: string) => `<!doctype html><html lang="fr"><he
 // Maquettes « création » : entreprises sans site, données publiques seulement,
 // site dessiné par Claude (aucune lecture de site : plusieurs par passage).
 export async function prepareCreations(db: SupabaseClient, opts: { max: number }) {
-  const { data: settings } = await db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily_creation").eq("id", 1).single();
+  const { data: settings } = await db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily_creation,design_ai").eq("id", 1).single();
   if (!settings?.maquette_enabled) return { state: "disabled" };
   const { count: today } = await db.from("yontech_maquettes").select("id", { count: "exact", head: true }).eq("kind", "creation").not("review", "is", null).gte("prepared_at", parisMidnightIso());
   let todo = Math.min(opts.max, Math.max(0, Number(settings.maquette_daily_creation || 0) - (today || 0)));
@@ -239,12 +247,18 @@ export async function prepareCreations(db: SupabaseClient, opts: { max: number }
     const addr = await checkAddress(cand.email);
     if (!addr.ok) { await db.from("yontech_prospection_messages").update({ ...(fromQueue ? { status: "skipped", error: `Adresse écartée : ${addr.reason}` } : {}), data: { ...(cand.data || {}), maquette_essai: "adresse invalide" } }).eq("id", cand.id); continue; }
     const data = creationData(cand as { company: string; email: string; data: Record<string, unknown> });
+    let lib: Awaited<ReturnType<typeof fillFromLibrary>> = null;
+    if (settings.design_ai === false) {
+      lib = await fillFromLibrary(db, data, "creation", String((cand.data || {}).naf || ""));
+      if (!lib) { await db.from("yontech_prospection_messages").update({ ...(fromQueue ? { status: "queued" } : {}), data: { ...(cand.data || {}), maquette_essai: "aucun modèle compatible" } }).eq("id", cand.id); continue; }
+    }
     const slug = await uniqueSlug(db, slugify(data.name));
     const { data: tpls } = await db.from("yontech_prospection_templates").select("id,subject,body").eq("kind", "maquette_creation").eq("active", true);
     const tpl = (tpls || []).length ? tpls![Math.floor(Math.random() * tpls!.length)] : null;
     const { error } = await db.from("yontech_maquettes").insert({
-      slug, message_id: cand.id, source_url: "", host: "", company: data.name, data, html: placeholder(data.name), kind: "creation",
-      status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(), design_status: "attente",
+      slug, message_id: cand.id, source_url: "", host: "", company: data.name, data, html: lib ? lib.html : placeholder(data.name), kind: "creation",
+      status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(),
+      ...(lib ? { design_status: "ok", design_direction: lib.direction, design_at: new Date().toISOString(), design_images: lib.images } : { design_status: "attente" }),
       template_id: tpl?.id || null, mail_subject: tpl?.subject || CREATION_SUBJECT, mail_body: tpl?.body || CREATION_BODY,
     });
     if (error) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "queued" }).eq("id", cand.id); continue; }

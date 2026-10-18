@@ -43,3 +43,6 @@ verify_jwt = false
 
 [functions.yontech-prospection-recap]
 verify_jwt = false
+
+[functions.yontech-maquette-templates]
+verify_jwt = false

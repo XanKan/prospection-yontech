@@ -23,6 +23,9 @@ const NAF_METIERS: Record<string, string> = {
   "71.12B": "ingénierie et études techniques", "81.30Z": "aménagement paysager",
 };
 
+// Liste des métiers distincts (jeux de textes des créations).
+export const METIERS = [...new Set(Object.values(NAF_METIERS))];
+
 export function metierOf(naf: string, fallback = "") {
   return NAF_METIERS[String(naf || "").toUpperCase()] || fallback || "bâtiment";
 }

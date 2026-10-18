@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     // Relances automatiques après la première visite d'une maquette.
     const viewFollowups = await sendViewFollowups(db, 3).catch((e) => ({ error: (e as Error).message }));
     // Envoi automatique des maquettes prêtes (réglage « Envoi automatique »).
-    const autoSent = await autoSendMaquettes(db, 3).catch((e) => ({ error: (e as Error).message }));
+    const autoSent = await autoSendMaquettes(db, 6).catch((e) => ({ error: (e as Error).message }));
     // Maquettes « création » (sans site) : aucune lecture de site, plusieurs par passage.
     const creations = await prepareCreations(db, { max: 4 }).catch((e) => ({ error: (e as Error).message }));
     // Une maquette par passage (toutes les 5 minutes) : lire jusqu'à neuf pages
