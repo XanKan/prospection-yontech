@@ -180,7 +180,7 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     const { data: inserted, error } = await db.from("yontech_maquettes").insert({
       slug, message_id: cand.id, source_url: built.data.source, host: built.data.host, company: built.data.name, data: built.data, html: lib ? lib.html : built.html,
       status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(),
-      ...(lib ? { design_status: "ok", design_direction: lib.direction, design_at: new Date().toISOString(), design_images: lib.images } : { design_status: "attente" }),
+      ...(lib ? { maison: true, design_status: "ok", design_direction: lib.direction, design_at: new Date().toISOString(), design_images: lib.images } : { design_status: "attente" }),
       template_id: tpl?.id || null, mail_subject: tpl?.subject || settings.maquette_subject || MAQUETTE_SUBJECT, mail_body: tpl?.body || settings.maquette_body || MAQUETTE_BODY,
     }).select("id").single();
     if (!error && inserted && !lib) await savePages(db, inserted.id, built.pages);
@@ -258,7 +258,7 @@ export async function prepareCreations(db: SupabaseClient, opts: { max: number }
     const { error } = await db.from("yontech_maquettes").insert({
       slug, message_id: cand.id, source_url: "", host: "", company: data.name, data, html: lib ? lib.html : placeholder(data.name), kind: "creation",
       status: "en_ligne", review: "a_valider", prepared_at: new Date().toISOString(),
-      ...(lib ? { design_status: "ok", design_direction: lib.direction, design_at: new Date().toISOString(), design_images: lib.images } : { design_status: "attente" }),
+      ...(lib ? { maison: true, design_status: "ok", design_direction: lib.direction, design_at: new Date().toISOString(), design_images: lib.images } : { design_status: "attente" }),
       template_id: tpl?.id || null, mail_subject: tpl?.subject || CREATION_SUBJECT, mail_body: tpl?.body || CREATION_BODY,
     });
     if (error) { if (fromQueue) await db.from("yontech_prospection_messages").update({ status: "queued" }).eq("id", cand.id); continue; }

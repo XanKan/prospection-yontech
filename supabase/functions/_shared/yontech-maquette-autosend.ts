@@ -29,6 +29,8 @@ export async function autoSendMaquettes(db: SupabaseClient, max = 3) {
   const { data: rows } = await db.from("yontech_maquettes")
     .select("id,slug,company,kind,data,mail_subject,mail_body,template_id,status,yontech_prospection_messages(id,email,company,status,data,unsubscribe_token,tracking_token)")
     .eq("review", "a_valider").eq("status", "en_ligne").eq("design_status", "ok")
+    // Générées maison (bibliothèque) : seulement si leur envoi automatique est activé.
+    .in("maison", settings.maquette_auto_maison ? [false, true] : [false])
     .lt("design_at", new Date(Date.now() - DELAY_MS).toISOString()).order("prepared_at").limit(20);
   const ready = await maquetteDomainReady();
   let sent = 0;
