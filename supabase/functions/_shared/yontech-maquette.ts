@@ -40,7 +40,7 @@ export type SiteData = {
 };
 export type Theme = "atelier" | "chantier" | "moderne";
 export const THEMES: Record<Theme, string> = { atelier: "Atelier (artisanat, bois, chaleureux)", chantier: "Chantier (BTP, énergique)", moderne: "Moderne (sobre, polyvalent)" };
-export type Hints = { company?: string; metier?: string; ville?: string; email?: string; cp?: string };
+export type Hints = { company?: string; metier?: string; ville?: string; email?: string; cp?: string; noAi?: boolean };
 type Raw = { url: string; host: string; html: string; css: string };
 
 /* ---------------- Téléchargement ---------------- */
@@ -865,7 +865,7 @@ export async function buildSite(url: string, hints: Hints = {}): Promise<{ data:
   data.siteYear = created?.year ?? null; data.siteYearHow = created?.how || "";
   data.quality = assessQuality(data, hints.company || "");
   // Rédaction par IA (si la clé est configurée et la maquette retenue) : textes courts et structurés.
-  const aiKey = Deno.env.get("YONTECH_ANTHROPIC_API_KEY") || "";
+  const aiKey = hints.noAi ? "" : Deno.env.get("YONTECH_ANTHROPIC_API_KEY") || "";
   if (aiKey && data.quality.ok) {
     const fileName = (u: string) => decodeURIComponent(u.split("?")[0].split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 80);
     data.copy = await rewriteCopy(aiKey, data, {

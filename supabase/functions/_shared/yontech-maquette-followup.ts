@@ -33,7 +33,7 @@ export function inSendingHours(s: Record<string, unknown>) {
 
 export async function sendViewFollowups(db: SupabaseClient, max = 3) {
   const { data: settings } = await db.from("yontech_prospection_settings").select("*").eq("id", 1).single();
-  if (!settings || settings.paused || !settings.maquette_enabled) return { state: "off" };
+  if (!settings || settings.paused) return { state: "off" };
   if (!inSendingHours(settings)) return { state: "off_hours" };
   const { data: rows } = await db.from("yontech_maquettes")
     .select("id,slug,company,mail_subject,mail_message_id,yontech_prospection_messages(id,email,company,data,status,replied_at,unsubscribe_token,tracking_token)")

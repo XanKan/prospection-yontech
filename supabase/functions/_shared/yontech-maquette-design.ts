@@ -186,6 +186,9 @@ export function finalizeHtml(raw: string, d: SiteData, allowed: string[]): { htm
 export async function submitDesigns(db: SupabaseClient, max = 4) {
   const ai = client();
   if (!ai) return { submitted: 0, note: "clé IA absente" };
+  // Interrupteur de coût : aucune nouvelle demande à Claude quand il est coupé.
+  const { data: st } = await db.from("yontech_prospection_settings").select("design_ai").eq("id", 1).single();
+  if (st && st.design_ai === false) return { submitted: 0, note: "IA coupée" };
   const { data: rows } = await db.from("yontech_maquettes").select("id,slug,data,design_attempts,kind").eq("design_status", "attente").eq("status", "en_ligne").not("data", "is", null).order("prepared_at", { ascending: false, nullsFirst: false }).limit(max);
   if (!rows?.length) return { submitted: 0 };
   const built: { row: DesignRow; req: Awaited<ReturnType<typeof buildRequest>> }[] = [];

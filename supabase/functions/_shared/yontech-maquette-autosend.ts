@@ -15,7 +15,8 @@ const DELAY_MS = 2 * 3_600_000;
 
 export async function autoSendMaquettes(db: SupabaseClient, max = 3) {
   const { data: settings } = await db.from("yontech_prospection_settings").select("*").eq("id", 1).single();
-  if (!settings?.maquette_auto || !settings.maquette_enabled || settings.paused) return { state: "off" };
+  // Indépendant de la préparation : les maquettes déjà prêtes partent même si la préparation est suspendue.
+  if (!settings?.maquette_auto || settings.paused) return { state: "off" };
   if (!inSendingHours(settings)) return { state: "off_hours" };
   const since = parisMidnightIso();
   const quota: Record<string, number> = { refonte: Number(settings.maquette_daily || 0), creation: Number(settings.maquette_daily_creation || 0) };

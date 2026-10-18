@@ -87,7 +87,7 @@ export async function releaseStale(db: SupabaseClient) {
 
 export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; budgetMs: number; force?: boolean }) {
   const started = Date.now();
-  const { data: settings } = await db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_subject,maquette_body").eq("id", 1).single();
+  const { data: settings } = await db.from("yontech_prospection_settings").select("maquette_enabled,maquette_daily,maquette_subject,maquette_body,design_ai").eq("id", 1).single();
   if (!settings) return { state: "error", error: "settings" };
   if (!settings.maquette_enabled && !opts.force) return { state: "disabled" };
   const { count: today } = await db.from("yontech_maquettes").select("id", { count: "exact", head: true }).eq("kind", "refonte").not("review", "is", null).gte("prepared_at", parisMidnightIso());
@@ -154,7 +154,7 @@ export async function prepareMaquettes(db: SupabaseClient, opts: { max: number; 
     // Marqué « essayé » avant la lecture : un site qui fait échouer l'exécution ne revient jamais en tête de file.
     await db.from("yontech_prospection_messages").update({ data: { ...(cand.data || {}), maquette_essai: "en cours" } }).eq("id", cand.id);
     let built: Awaited<ReturnType<typeof buildSite>>;
-    try { built = await buildSite(String(cand.data.site), { company: cand.company, metier: cand.data?.metier, ville: cand.data?.ville, cp: cand.data?.cp, email: cand.email }); }
+    try { built = await buildSite(String(cand.data.site), { company: cand.company, metier: cand.data?.metier, ville: cand.data?.ville, cp: cand.data?.cp, email: cand.email, noAi: settings.design_ai === false }); }
     catch (error) { built = { error: "lecture impossible : " + String((error as Error).message || error).slice(0, 80) }; }
     if (!("error" in built) && built.data.quality && !built.data.quality.ok) {
       failed++; errors.push(`${cand.company} : écartée (${built.data.quality.blocking.join(", ")})`);

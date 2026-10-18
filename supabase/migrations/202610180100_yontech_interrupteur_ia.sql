@@ -1,0 +1,1 @@
+alter table public.yontech_prospection_settings add column if not exists design_ai boolean not null default true; update public.yontech_prospection_settings set design_ai=false, maquette_enabled=false where id=1 returning design_ai, maquette_enabled, maquette_auto;
