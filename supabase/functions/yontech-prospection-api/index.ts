@@ -448,7 +448,7 @@ Deno.serve(async (req) => {
       const ready = await maquetteDomainReady();
       const [settings, pending, sent] = await Promise.all([
         db.from("yontech_prospection_settings").select("maquette_enabled,maquette_auto,maquette_auto_maison,maquette_daily,maquette_daily_creation,maquette_subject,maquette_body").eq("id", 1).single(),
-        db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data,status,opened_at,sent_at)").eq("review", "a_valider").order("prepared_at").limit(100),
+        db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data,status,opened_at,sent_at)").eq("review", "a_valider").order("prepared_at").limit(600),
         db.from("yontech_maquettes").select("id,slug,company,views,last_view_at,sent_at,prepared_at,review,data,kind,maison,view_followup_at,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)").in("review", ["envoye"]).order("sent_at", { ascending: false }).limit(100),
       ]);
       for (const r of [settings, pending, sent]) if (r.error) throw r.error;
