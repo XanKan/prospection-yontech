@@ -4,7 +4,10 @@
 // /_img?u=… (récupérées sur le site d'origine puis mises en cache 7 jours).
 // Les Workers en domaine personnalisé (yontech.fr, maquette, sebalyo) passent
 // avant cette route ; par prudence, les noms réservés repartent vers l'origine.
+// lien.yontech.fr relaie le suivi des mails (pixel, clics) : les liens des mails
+// restent sur le domaine de l'expéditeur (réglage YONTECH_TRACKING_BASE).
 const ENDPOINT = "https://sdygujqnpsbnmmkjdjfz.supabase.co/functions/v1/yontech-maquette";
+const TRACK = "https://sdygujqnpsbnmmkjdjfz.supabase.co/functions/v1/yontech-prospection-track";
 const RESERVED = new Set(["www", "prospection", "mail", "webmail", "smtp", "imap", "pop", "ftp", "autodiscover", "autoconfig", "api", "app", "admin", "go", "cdn", "static", "maquette", "maquettes", "sebalyo"]);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36";
 
@@ -28,12 +31,28 @@ async function proxyImage(url, ctx) {
   return response;
 }
 
+// Suivi des mails : même requête (méthode, paramètres), réponse transmise telle
+// quelle (redirection vers la destination, pixel, page de lien piège).
+async function proxyTrack(request, url) {
+  let upstream;
+  try {
+    upstream = await fetch(TRACK + url.search, {
+      method: request.method === "HEAD" ? "HEAD" : "GET", redirect: "manual",
+      headers: { "user-agent": request.headers.get("user-agent") || "", accept: request.headers.get("accept") || "*/*", "x-forwarded-for": request.headers.get("cf-connecting-ip") || "" },
+    });
+  } catch { return Response.redirect("https://yontech.fr", 302); }
+  const headers = new Headers({ "x-robots-tag": "noindex, nofollow", "referrer-policy": "no-referrer" });
+  for (const k of ["content-type", "location", "cache-control"]) { const v = upstream.headers.get(k); if (v) headers.set(k, v); }
+  return new Response(request.method === "HEAD" ? null : upstream.body, { status: upstream.status, headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const host = url.hostname.toLowerCase();
     const match = host.match(/^([a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?)\.yontech\.fr$/);
     if (!match) return fetch(request);
+    if (match[1] === "lien") return proxyTrack(request, url);
     if (url.pathname === "/_img") return proxyImage(url, ctx);
     if (RESERVED.has(match[1]) || match[1] === "img") return RESERVED.has(match[1]) ? fetch(request) : new Response(page("Page introuvable", "Rien ici."), { status: 404, headers: { "content-type": "text/html; charset=utf-8" } });
     if (url.pathname === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });

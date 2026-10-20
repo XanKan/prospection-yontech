@@ -105,13 +105,15 @@ export function strongFindings(findings: string[]) {
 }
 
 // {variable} ou {variable|texte si vide}. Les accolades inconnues restent
-// telles quelles pour rester visibles dans l'aperçu.
+// telles quelles pour rester visibles dans l'aperçu. « de {metier} » devient
+// « d'électricité » quand la valeur commence par une voyelle (pas devant h ni y).
 export function renderTemplate(template: string, vars: Vars) {
-  return String(template ?? "").replace(/\{([a-z_]+)(?:\|([^{}]*))?\}/gi, (match, name: string, fallback?: string) => {
+  return String(template ?? "").replace(/(?:(?<!\p{L})(de) )?\{([a-z_]+)(?:\|([^{}]*))?\}/giu, (match, de: string | undefined, name: string, fallback?: string) => {
     const key = name.toLowerCase();
     if (!TEMPLATE_VARIABLES.includes(key)) return match;
-    const value = vars[key] || "";
-    return value || (fallback ?? "");
+    const value = vars[key] || fallback || "";
+    if (!de) return value;
+    return /^[aeiouàâäéèêëîïôöûüœ]/i.test(value) ? `${de[0]}'${value}` : `${de} ${value}`;
   });
 }
 
