@@ -49,3 +49,6 @@ verify_jwt = false
 
 [functions.yontech-delivrabilite]
 verify_jwt = false
+
+[functions.yontech-boite]
+verify_jwt = false
