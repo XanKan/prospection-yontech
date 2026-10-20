@@ -28,7 +28,7 @@ export async function sendNext(db: SupabaseClient) {
   const result = await deliver({
     settings, template, to: message.email, vars: templateVars(message.data || {}), source: String((message.data || {}).source || ""),
     token: message.unsubscribe_token, trackingToken: message.tracking_token || undefined,
-    plain: true, // premier contact sobre ; les relances gardent le suivi
+    // Premier contact complet : vidéo, signature et suivi des ouvertures et des clics.
   });
   const { data: finished, error: finishError } = await db.rpc("yontech_prospection_finish", result.ok
     ? { target_id: message.id, outcome: "sent", target_template_id: template.id, target_subject: result.subject, target_body: result.body, target_message_id: result.messageId }
