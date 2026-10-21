@@ -157,6 +157,11 @@
   .days div{flex:1 0 34px;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:34px}
   .days i{display:block;width:100%;max-width:26px;border-radius:5px 5px 2px 2px;background:var(--violet);min-height:2px}
   .days i.zero{background:var(--line)}
+  .days em.bar{display:flex;flex-direction:column-reverse;width:100%;max-width:26px;border-radius:5px 5px 2px 2px;overflow:hidden;background:var(--violet);min-height:2px}
+  .days em.bar.zero{background:var(--line)}
+  .days em.bar i{display:block;flex:0 0 auto;align-self:stretch;width:auto;max-width:none;border-radius:0;min-height:0;background:transparent}
+  .days em.bar i.mq,.lg.mq{background:#0e9f8e}
+  .lg{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--violet);margin:0 4px 0 10px;vertical-align:-1px}
   .days span{font-size:.66rem;color:var(--muted);font-weight:700}
   .days b{font-size:.7rem;font-weight:800}
 
@@ -474,11 +479,18 @@
           <div class="kpi kc"><div class="lab">Exclus</div><div class="val num" id="kSupp">0</div><div class="foot">désinscrits, rebonds, déjà contactés</div></div>
           <div class="kpi ke"><div class="lab">Échecs</div><div class="val num" id="kFail">0</div><div class="foot">adresses refusées ou erreurs</div></div>
         </div>
+        <div class="kpis" id="mqDash" hidden>
+          <div class="kpi ka"><div class="lab">Maquettes envoyées aujourd'hui</div><div class="val num" id="mqkToday">0</div><div class="meter"><i id="mqkTodayBar" style="width:0"></i></div><div class="foot" id="mqkTodayF"></div></div>
+          <div class="kpi kd"><div class="lab">Maquettes en attente</div><div class="val num" id="mqkPend">0</div><div class="foot" id="mqkPendF"></div></div>
+          <div class="kpi kb"><div class="lab">Maquettes envoyées au total</div><div class="val num" id="mqkSent">0</div><div class="foot"><a href="#" data-go="mqp">Voir la liste</a></div></div>
+          <div class="kpi kc"><div class="lab">Maquettes vues</div><div class="val num" id="mqkViewed">0</div><div class="foot" id="mqkViewedF"></div></div>
+          <div class="kpi ke"><div class="lab">Réponses aux maquettes</div><div class="val num" id="mqkRep">0</div><div class="foot">à rappeler en priorité</div></div>
+        </div>
 
         <div class="grid2">
           <div class="card">
             <div class="card-h"><h2>Envois des 14 derniers jours</h2></div>
-            <div class="card-b"><div class="days" id="chDays"></div></div>
+            <div class="card-b"><div class="days" id="chDays"></div><div class="note" style="margin-top:2px"><i class="lg mq" style="margin-left:0"></i>maquettes<i class="lg"></i>autres envois</div></div>
           </div>
           <div class="card">
             <div class="card-h"><h2>Recherche d'entreprises et d'adresses</h2><span class="st" id="apStatus"><i></i><span>—</span></span>
@@ -770,6 +782,7 @@
             <button type="button" class="tab" data-st="all">Tous<span class="pill num" id="tcAll">0</span></button>
             <button type="button" class="tab on" data-st="queued">En file<span class="pill num" id="tcQueued">0</span></button>
             <button type="button" class="tab" data-st="sent">Envoyés<span class="pill num" id="tcSent">0</span></button>
+            <button type="button" class="tab" data-st="maquettes">Maquettes<span class="pill num" id="tcMaq">0</span></button>
             <button type="button" class="tab" data-st="followups">Relances<span class="pill num" id="tcFollow">0</span></button>
             <button type="button" class="tab" data-st="failed">Échecs<span class="pill num" id="tcFailed">0</span></button>
             <button type="button" class="tab" data-st="skipped">Ignorés<span class="pill num" id="tcSkipped">0</span></button>
@@ -1657,6 +1670,23 @@ function renderState(){
   $("tcAll").textContent = fmt((c.queued || 0) + (c.sent || 0) + (c.failed || 0) + (c.skipped || 0));
   $("tcFailed").textContent = fmt(c.failed); $("tcSkipped").textContent = fmt(c.skipped);
 
+  // Maquettes : envois du jour face au quota, en attente, envoyées, vues, réponses.
+  const mq = state.maquettes;
+  $("mqDash").hidden = !mq;
+  if (mq){
+    const tot = mq.today.refonte + mq.today.creation, q = (mq.quota.refonte || 0) + (mq.quota.creation || 0);
+    $("mqkToday").innerHTML = fmt(tot) + ' <small>/ ' + fmt(q) + "</small>";
+    $("mqkTodayBar").style.width = (q ? Math.min(100, Math.round(tot * 100 / q)) : 0) + "%";
+    $("mqkTodayF").textContent = "Refontes " + mq.today.refonte + " / " + mq.quota.refonte + " · créations " + mq.today.creation + " / " + mq.quota.creation + (mq.auto ? " · envoi automatique" : " · après validation");
+    $("mqkPend").textContent = fmt(mq.pending);
+    $("mqkPendF").textContent = fmt(mq.ready) + " prête(s) à partir" + (mq.pending > mq.ready ? " · " + fmt(mq.pending - mq.ready) + " en préparation" : "");
+    $("mqkSent").textContent = fmt(mq.sent);
+    $("mqkViewed").textContent = fmt(mq.viewed);
+    $("mqkViewedF").textContent = mq.sent ? Math.round(mq.viewed * 100 / mq.sent) + " % des maquettes envoyées" : "";
+    $("mqkRep").textContent = fmt(mq.replied);
+    $("tcMaq").textContent = fmt(mq.sent);
+  }
+
   // Tout l'historique, jour par jour (heure de Paris), du premier envoi à aujourd'hui.
   const keys = Object.keys(state.perDay || {}).sort();
   const todayKey = new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
@@ -1665,14 +1695,17 @@ function renderState(){
     for (let d = new Date(keys[0] + "T12:00:00"); ; d = new Date(d.getTime() + 864e5)){
       const key = d.toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
       const v = state.perDay[key] || { p: 0, r: 0 };
-      days.push({ key, p: v.p || 0, r: v.r || 0, n: (v.p || 0) + (v.r || 0), lab: d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) });
+      const mqDay = ((state.maquettes || {}).perDay || {})[key] || 0;
+      days.push({ key, p: v.p || 0, r: v.r || 0, m: mqDay, n: Math.max((v.p || 0) + (v.r || 0), mqDay), lab: d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) });
       if (key >= todayKey || days.length > 400) break;
     }
   }
   const max = Math.max(1, ...days.map(d => d.n));
   const chTotal = days.reduce((a, d) => a + d.n, 0);
   $("chDays").style.overflowX = "auto";
-  $("chDays").innerHTML = days.map(d => '<div title="' + esc(d.key) + " : " + d.p + " premier(s) contact(s)" + (d.r ? ", " + d.r + " relance(s)" : "") + '"><b>' + (d.n || "") + '</b><i class="' + (d.n ? "" : "zero") + '" style="height:' + Math.max(2, Math.round(d.n / max * 86)) + 'px"></i><span>' + esc(d.lab) + "</span></div>").join("") ||
+  // Barre : la part des maquettes en vert, le reste des envois en violet.
+  $("chDays").innerHTML = days.map(d => { const h = Math.max(2, Math.round(d.n / max * 86)), hm = d.n ? Math.round(h * Math.min(d.m, d.n) / d.n) : 0;
+    return '<div title="' + esc(d.key) + " : " + d.p + " premier(s) contact(s)" + (d.r ? ", " + d.r + " relance(s)" : "") + (d.m ? ", dont " + d.m + " maquette(s)" : "") + '"><b>' + (d.n || "") + '</b><em class="bar' + (d.n ? "" : " zero") + '" style="height:' + h + 'px">' + (hm ? '<i class="mq" style="height:' + hm + 'px"></i>' : "") + '<i style="flex:1"></i></em><span>' + esc(d.lab) + "</span></div>"; }).join("") ||
     '<p class="note">Aucun envoi pour l\'instant.</p>';
   const chTitle = $("chDays").closest(".card") && $("chDays").closest(".card").querySelector(".card-h h2");
   if (chTitle) chTitle.textContent = "Envois par jour · " + fmt(chTotal) + " au total" + (days.length ? " depuis le " + esc(days[0].lab) : "");
@@ -2168,6 +2201,8 @@ async function loadLog(){
   try {
     const data = LOG.status === "followups"
       ? await api("followups.list", { page: LOG.page, search: $("lq").value, stage: $("lStage").value })
+      : LOG.status === "maquettes"
+      ? await api("queue.list", { status: "sent", page: LOG.page, search: $("lq").value, track: $("lTrack").value, how: $("lHow").value, campagne: $("lCamp").value, maquette: $("lMaq").value || "avec" })
       : await api("queue.list", { status: LOG.status, page: LOG.page, search: $("lq").value, track: LOG.status === "sent" ? $("lTrack").value : "", how: $("lHow").value, campagne: $("lCamp").value, maquette: LOG.status === "sent" || LOG.status === "all" ? $("lMaq").value : "" });
     if (seq !== logSeq) return;
     LOG.items = data.items; LOG.total = data.total; LOG.sel.clear();
@@ -2176,14 +2211,15 @@ async function loadLog(){
 }
 function renderLog(){
   document.querySelectorAll("#logTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.st === LOG.status));
-  $("lDateH").textContent = LOG.status === "sent" ? "Envoyé le" : LOG.status === "followups" ? "Relance envoyée le" : LOG.status === "all" ? "Envoyé / ajouté le" : "Ajouté le";
-  $("lTrack").hidden = LOG.status !== "sent";
-  $("lMaq").hidden = LOG.status !== "sent" && LOG.status !== "all";
+  const ST = LOG.status === "maquettes" ? "sent" : LOG.status;
+  $("lDateH").textContent = ST === "sent" ? "Envoyé le" : LOG.status === "followups" ? "Relance envoyée le" : LOG.status === "all" ? "Envoyé / ajouté le" : "Ajouté le";
+  $("lTrack").hidden = ST !== "sent";
+  $("lMaq").hidden = ST !== "sent" && LOG.status !== "all";
   $("lHow").hidden = LOG.status === "followups";
   $("lCamp").hidden = LOG.status === "followups";
   $("lStage").hidden = LOG.status !== "followups";
   $("bLogRetry").hidden = LOG.status !== "failed";
-  $("bLogRemove").hidden = LOG.status === "sent" || LOG.status === "all" || LOG.status === "followups";
+  $("bLogRemove").hidden = ST === "sent" || LOG.status === "all" || LOG.status === "followups";
   $("bLogRemove").textContent = LOG.status === "queued" ? "Retirer de la file" : "Supprimer";
   const pages = Math.max(1, Math.ceil(LOG.total / 50));
   $("lPage").textContent = "Page " + LOG.page + " / " + pages + " · " + fmt(LOG.total) + " ligne(s)";
@@ -2212,9 +2248,9 @@ function renderLog(){
     "<td><b>" + esc(niceCompany(m.company) || "—") + '</b><div class="meta">' + esc(m.email) + "</div></td>" +
     '<td class="num">' + (m.score == null ? "—" : m.score) + "</td>" +
     '<td class="nw">' + esc(ORIGIN[m.origin] || m.origin) + signalBadge(m) + "</td>" +
-    '<td class="nw">' + esc(dateTimeFr(LOG.status === "sent" || (LOG.status === "all" && m.sent_at) ? m.sent_at : m.created_at)) + "</td>" +
+    '<td class="nw">' + esc(dateTimeFr(ST === "sent" || (LOG.status === "all" && m.sent_at) ? m.sent_at : m.created_at)) + "</td>" +
     '<td><span class="badge ' + esc(m.status) + '">' + esc(BADGE[m.status] || m.status) + "</span>" + (m.status === "sent" ? trackState(m) : "") + maqState(m) + (m.error && m.status !== "sent" ? '<div class="meta">' + esc(m.error) + "</div>" : "") + "</td></tr>"
-  ).join("") : '<tr><td colspan="6" class="empty"><b>Rien ici</b>' + esc(empty[LOG.status]) + "</td></tr>";
+  ).join("") : '<tr><td colspan="6" class="empty"><b>Rien ici</b>' + esc(empty[LOG.status] || "Aucune maquette envoyée pour l'instant.") + "</td></tr>";
   logSel();
 }
 function logSel(){

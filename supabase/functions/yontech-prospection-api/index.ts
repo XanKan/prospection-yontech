@@ -3,7 +3,8 @@ import { BRAND, composeEmail, normalizeTarget, targetKey, templateVars, unknownV
 import { deliver, smtpConfigured, smtpHost, smtpPort } from "../_shared/yontech-mail.ts";
 import { knownFor, maybeSource } from "../_shared/yontech-jobs.ts";
 import { buildSite, maquetteMailBlock, pickVariant, renderAll, slugify, type SiteData } from "../_shared/yontech-maquette.ts";
-import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, prepareCreations, prepareMaquettes, releaseStale, savePages, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
+import { MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, parisMidnightIso, prepareCreations, prepareMaquettes, releaseStale, savePages, uniqueSlug } from "../_shared/yontech-maquette-jobs.ts";
+import { MAISON_VERSION } from "../_shared/yontech-maquette-templates.ts";
 
 // Point d'entrée unique de l'outil prospection.yontech.fr. Réservé aux
 // comptes Supabase Auth dont l'adresse figure dans le secret
@@ -73,6 +74,33 @@ async function maquetteTemplate(db: any) {
 }
 // deno-lint-ignore no-explicit-any
 type Rec = Record<string, any>;
+
+// Chiffres des maquettes pour le tableau de bord : envois du jour par type (et quota),
+// en attente, prêtes à partir, envoyées, vues, réponses, envois par jour (15 jours).
+// deno-lint-ignore no-explicit-any
+async function maquetteStats(db: any) {
+  const since = parisMidnightIso(), from = new Date(Date.now() - 15 * 864e5).toISOString();
+  const M = () => db.from("yontech_maquettes");
+  const [st, today, pending, ready, sent, viewed, days, replied] = await Promise.all([
+    db.from("yontech_prospection_settings").select("maquette_auto,maquette_auto_maison,maquette_daily,maquette_daily_creation").eq("id", 1).single(),
+    M().select("kind").eq("review", "envoye").gte("sent_at", since).limit(2000),
+    M().select("id", { count: "exact", head: true }).eq("review", "a_valider").eq("status", "en_ligne"),
+    M().select("id", { count: "exact", head: true }).eq("review", "a_valider").eq("status", "en_ligne").eq("design_status", "ok").or(`maison.eq.false,data->maison->>v.eq.${MAISON_VERSION}`),
+    M().select("id", { count: "exact", head: true }).eq("review", "envoye"),
+    M().select("id", { count: "exact", head: true }).eq("review", "envoye").gt("views", 0),
+    M().select("sent_at").eq("review", "envoye").gte("sent_at", from).limit(5000),
+    db.from("yontech_prospection_messages").select("id", { count: "exact", head: true }).not("data->>maquette", "is", null).not("replied_at", "is", null),
+  ]);
+  const perDay: Record<string, number> = {};
+  for (const r of (days.data || []) as Rec[]) { const k = new Date(r.sent_at).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }); perDay[k] = (perDay[k] || 0) + 1; }
+  const t = { refonte: 0, creation: 0 };
+  for (const r of (today.data || []) as Rec[]) t[r.kind === "creation" ? "creation" : "refonte"]++;
+  const s = (st.data || {}) as Rec;
+  return {
+    today: t, quota: { refonte: Number(s.maquette_daily || 0), creation: Number(s.maquette_daily_creation || 0) }, auto: !!s.maquette_auto, autoMaison: !!s.maquette_auto_maison,
+    pending: pending.count || 0, ready: ready.count || 0, sent: sent.count || 0, viewed: viewed.count || 0, replied: replied.count || 0, perDay,
+  };
+}
 
 // Maquettes envoyées, toutes : PostgREST rend au plus 1 000 lignes par requête.
 // deno-lint-ignore no-explicit-any
@@ -190,6 +218,7 @@ Deno.serve(async (req) => {
         scanned: scanStats.data || { total: 0, sites: 0, emails: 0, today: 0, emails_today: 0 },
         // Compteurs par campagne (logiciel, site) : en file, envoyés, aujourd'hui, ouverts, clics, réponses.
         campaigns: campaigns.data || {},
+        maquettes: await maquetteStats(db).catch(() => null),
       });
     }
 
