@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     // Maquettes enregistrées avec un ancien gabarit : redessinées par lots.
     const redrawn = await refreshStale(db, 15).catch((e) => { console.error("[Maquette rendu]", (e as Error).message); return 0; });
     // Maquettes « maison » remplies avec d'anciennes règles : remplies de nouveau (même modèle).
-    const remplies = await refreshMaison(db, 8, 40_000).catch((e) => ({ error: (e as Error).message }));
+    const remplies = await refreshMaison(db, 30, 40_000).catch((e) => ({ error: (e as Error).message }));
     // Sites sur mesure : récupère les lots terminés, puis soumet les maquettes en attente.
     const designed = await collectDesigns(db).catch((e) => ({ error: (e as Error).message }));
     const designing = await submitDesigns(db, 12).catch((e) => ({ error: (e as Error).message }));
