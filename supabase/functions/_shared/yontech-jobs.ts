@@ -9,6 +9,10 @@ import { runSourcing } from "./yontech-sourcing.ts";
 // minutes quand la file baisse) et yontech-prospection-api (boutons de l'outil).
 
 export async function sendNext(db: SupabaseClient) {
+  // Mode « maquettes seules » : ni premier mail classique ni relance classique ;
+  // la recherche d'entreprises et l'envoi des maquettes continuent.
+  const { data: mode } = await db.from("yontech_prospection_settings").select("premiers_mails").eq("id", 1).single();
+  if (mode?.premiers_mails === false) return { state: "maquettes_seules" };
   const { data: claim, error } = await db.rpc("yontech_prospection_claim_next", {});
   if (error) throw error;
   if (claim?.state !== "claimed") return claim;
