@@ -181,6 +181,9 @@
   .chip:has(input:checked){background:var(--ink);color:#fff;border-color:var(--ink)}
   .chip:has(input:focus-visible){outline:2px solid var(--violet);outline-offset:2px}
   button.chip{font-family:inherit}
+  button.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  #mqpSentF{margin-bottom:6px}
+  #mqpSentF span{font-weight:500;opacity:.75}
   .seg{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;gap:3px;flex-wrap:wrap}
   .seg label{cursor:pointer;padding:6px 13px;border-radius:6px;font-size:.85rem;font-weight:700;color:var(--muted);transition:background .12s,color .12s;position:relative}
   .seg input{position:absolute;opacity:0;width:0;height:0}
@@ -613,9 +616,18 @@
 
         <div class="card">
           <div class="card-h"><h2>Envoyés</h2><span class="sub" id="mqpSentCount"></span></div>
-          <div class="card-b" style="padding-top:6px;padding-bottom:6px">
+          <div class="card-b" style="padding-top:10px;padding-bottom:6px">
+            <div class="chips" id="mqpSentF">
+              <button type="button" class="chip on" data-mqps="all">Toutes <span></span></button>
+              <button type="button" class="chip" data-mqps="refonte">Refonte <span></span></button>
+              <button type="button" class="chip" data-mqps="creation">Création <span></span></button>
+              <button type="button" class="chip" data-mqps="maison">Générées maison <span></span></button>
+              <button type="button" class="chip" data-mqps="vue">Maquette vue <span></span></button>
+              <button type="button" class="chip" data-mqps="ouvert">Mail ouvert <span></span></button>
+            </div>
             <ul class="list" id="mqpSent"></ul>
             <p class="note" id="mqpSentEmpty" hidden style="padding:10px 0">Rien d'envoyé pour l'instant.</p>
+            <p style="text-align:center;margin:8px 0" id="mqpSentMoreP" hidden><button type="button" class="b b-out b-sm" id="mqpSentMore">Afficher plus</button></p>
           </div>
         </div>
 
@@ -1148,8 +1160,13 @@ document.addEventListener("click", ev => {
 /* ============================================================
    PROSPECTION MAQUETTE — 20 mails préparés par jour, envoyés après validation
    ============================================================ */
-let MQP = null, MQP_KIND = "refonte";
+let MQP = null, MQP_KIND = "refonte", MQP_SENT_F = "all", MQP_SENT_N = 50;
 document.addEventListener("click", ev => { const b = ev.target.closest("[data-mqpk]"); if (!b) return; MQP_KIND = b.dataset.mqpk; renderMqp(); });
+document.addEventListener("click", ev => {
+  const f = ev.target.closest("[data-mqps]");
+  if (f) { MQP_SENT_F = f.dataset.mqps; MQP_SENT_N = 50; renderMqp(); return; }
+  if (ev.target.closest("#mqpSentMore")) { MQP_SENT_N += 100; renderMqp(); }
+});
 
 async function loadMqp(){
   MQP = await api("mqp.state");
@@ -1160,7 +1177,8 @@ function mqpSentLine(r){
   const tags = [
     ['Ouvert', !!m.opened_at], ['Maquette vue', (r.views || 0) > 0], ['Clic', !!m.site_clicked_at], ['Réponse', !!m.replied_at]
   ].map(([l, on]) => '<span class="tagx' + (on ? " on" : "") + '">' + l + '</span>').join("");
-  return '<li><div class="grow"><b>' + esc(r.company) + '</b><span>' + esc(m.email || "") + " · envoyé le " + dateFr(r.sent_at) + " à " + timeFr(r.sent_at) + (r.views ? " · " + r.views + " vue(s)" : "") + '</span></div>' + tags +
+  const type = (r.kind === "creation" ? "Création" : "Refonte") + (r.maison ? " · maison" : "");
+  return '<li><div class="grow"><b>' + esc(r.company) + '</b><span>' + type + " · " + esc(m.email || "") + " · envoyé le " + dateFr(r.sent_at) + " à " + timeFr(r.sent_at) + (r.views ? " · " + r.views + " vue(s)" : "") + '</span></div>' + tags +
     '<a class="b b-out b-xs" href="' + esc(apercu(r.url)) + '" target="_blank" rel="noopener">Maquette ↗</a></li>';
 }
 function designBusy(r){ return r.design_status === "attente" || r.design_status === "en_cours"; }
@@ -1225,9 +1243,16 @@ function renderMqp(){
         '<button type="button" class="b b-out b-sm" data-mqp="del">Supprimer</button>' +
       '</div></div>';
   }).join("");
-  $("mqpSentCount").textContent = sent.length ? sent.length + " envoi(s)" : "";
-  $("mqpSentEmpty").hidden = sent.length > 0;
-  $("mqpSent").innerHTML = sent.map(mqpSentLine).join("");
+  // Envoyés : tous les types ensemble (les onglets du haut ne filtrent que « À valider »).
+  const sentOf = f => allSent.filter(r => f === "all" ? true : f === "maison" ? !!r.maison : f === "vue" ? (r.views || 0) > 0
+    : f === "ouvert" ? !!(r.yontech_prospection_messages || {}).opened_at : !r.maison && kindOf(r) === f);
+  document.querySelectorAll("#mqpSentF [data-mqps]").forEach(b => { b.classList.toggle("on", b.dataset.mqps === MQP_SENT_F); b.querySelector("span").textContent = "(" + sentOf(b.dataset.mqps).length + ")"; });
+  const shown = sentOf(MQP_SENT_F);
+  $("mqpSentCount").textContent = allSent.length ? allSent.length + " envoi(s) au total" : "";
+  $("mqpSentEmpty").hidden = shown.length > 0;
+  $("mqpSent").innerHTML = shown.slice(0, MQP_SENT_N).map(mqpSentLine).join("");
+  $("mqpSentMoreP").hidden = shown.length <= MQP_SENT_N;
+  $("mqpSentMore").textContent = "Afficher plus (" + (shown.length - Math.min(MQP_SENT_N, shown.length)) + " restants)";
   const tpls = s.templates || [];
   $("mqpTplNote").innerHTML = tpls.length ? "Texte du mail : modèle(s) de type « Prospection maquette » de l'écran Messages — " + tpls.map(t => "<b>" + esc(t.name) + "</b>" + (t.active ? "" : " (inactif)")).join(", ") + ". Plusieurs modèles actifs sont tirés au hasard. Un nouveau texte s'applique aux prochains mails préparés ; ceux en attente restent modifiables un par un ci-dessus." : "Aucun modèle « Prospection maquette » : le texte par défaut est utilisé. Créez-en un dans Messages pour le personnaliser.";
   if (document.activeElement !== $("mqpDaily")){

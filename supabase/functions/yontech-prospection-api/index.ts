@@ -73,6 +73,19 @@ async function maquetteTemplate(db: any) {
 }
 // deno-lint-ignore no-explicit-any
 type Rec = Record<string, any>;
+
+// Maquettes envoyées, toutes : PostgREST rend au plus 1 000 lignes par requête.
+// deno-lint-ignore no-explicit-any
+async function allSentMaquettes(db: any, columns: string): Promise<{ data: Rec[] | null; error: unknown }> {
+  const rows: Rec[] = [];
+  for (let from = 0; from < 20000; from += 1000) {
+    const page = await db.from("yontech_maquettes").select(columns).in("review", ["envoye"]).order("sent_at", { ascending: false }).range(from, from + 999);
+    if (page.error) return { data: null, error: page.error };
+    rows.push(...((page.data || []) as Rec[]));
+    if ((page.data || []).length < 1000) break;
+  }
+  return { data: rows, error: null };
+}
 const MAQUETTE_COLUMNS = "id,slug,message_id,source_url,host,company,status,views,last_view_at,emailed_at,email_to,created_at,updated_at,data,review,prepared_at,sent_at,mail_subject,mail_body,template_id,design_status,design_error,kind,design_at,design_direction,maison";
 
 function adminAllowed(address: string) {
@@ -449,7 +462,7 @@ Deno.serve(async (req) => {
       const [settings, pending, sent] = await Promise.all([
         db.from("yontech_prospection_settings").select("maquette_enabled,maquette_auto,maquette_auto_maison,maquette_daily,maquette_daily_creation,maquette_subject,maquette_body").eq("id", 1).single(),
         db.from("yontech_maquettes").select(MAQUETTE_COLUMNS + ",yontech_prospection_messages(id,email,company,score,data,status,opened_at,sent_at)").eq("review", "a_valider").order("prepared_at").limit(600),
-        db.from("yontech_maquettes").select("id,slug,company,views,last_view_at,sent_at,prepared_at,review,data,kind,maison,view_followup_at,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)").in("review", ["envoye"]).order("sent_at", { ascending: false }).limit(100),
+        allSentMaquettes(db, "id,slug,company,views,last_view_at,sent_at,prepared_at,review,data,kind,maison,view_followup_at,yontech_prospection_messages(id,email,opened_at,open_count,site_clicked_at,click_count,replied_at,scanner_at,status)"),
       ]);
       for (const r of [settings, pending, sent]) if (r.error) throw r.error;
       const midnight = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" }));
