@@ -4,6 +4,7 @@ import { deliver, type SenderSettings } from "./yontech-mail.ts";
 import { inSendingHours } from "./yontech-maquette-followup.ts";
 import { CREATION_BODY, CREATION_SUBJECT, MAQUETTE_BODY, MAQUETTE_SUBJECT, maquetteDomainReady, maquetteUrl, parisMidnightIso } from "./yontech-maquette-jobs.ts";
 import { maquetteMailBlock, type SiteData } from "./yontech-maquette.ts";
+import { MAISON_VERSION } from "./yontech-maquette-templates.ts";
 
 // Envoi automatique des maquettes (réglage « Envoi automatique ») : une maquette
 // dont le site sur mesure est prêt part deux heures après, pendant les créneaux
@@ -31,6 +32,8 @@ export async function autoSendMaquettes(db: SupabaseClient, max = 3) {
     .eq("review", "a_valider").eq("status", "en_ligne").eq("design_status", "ok")
     // Générées maison (bibliothèque) : seulement si leur envoi automatique est activé.
     .in("maison", settings.maquette_auto_maison ? [false, true] : [false])
+    // … et seulement une fois remplies avec les règles en vigueur (jamais une ancienne version).
+    .or(`maison.eq.false,data->maison->>v.eq.${MAISON_VERSION}`)
     .lt("design_at", new Date(Date.now() - DELAY_MS).toISOString()).order("prepared_at").limit(20);
   const ready = await maquetteDomainReady();
   let sent = 0;
