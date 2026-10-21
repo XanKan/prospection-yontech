@@ -330,7 +330,9 @@ Deno.serve(async (req) => {
     if (action === "queue.list") {
       const status = text(payload.status, 20), page = integer(payload.page ?? 1, 1, 100000), size = 50, q = searchTerm(payload.search);
       const track = text(payload.track, 20), how = text(payload.how, 20), campagne = text(payload.campagne, 20), maq = text(payload.maquette, 20);
-      let query = db.from("yontech_prospection_messages").select(`id,siren,email,company,score,origin,status,subject,error,created_at,sent_at,data,opened_at,open_count,video_clicked_at,site_clicked_at,replied_at,scanner_at,scanner_hits,yontech_prospection_followups${status === "sent" && track === "followed" ? "!inner" : ""}(stage,status,sent_at)`, { count: "exact" });
+      const columns: string = `id,siren,email,company,score,origin,status,subject,error,created_at,sent_at,data,opened_at,open_count,video_clicked_at,site_clicked_at,replied_at,scanner_at,scanner_hits,yontech_prospection_followups${status === "sent" && track === "followed" ? "!inner" : ""}(stage,status,sent_at)${maq && maq !== "sans" ? ",yontech_maquettes!inner(kind,views,view_followup_at,review)" : ""}`;
+      // deno-lint-ignore no-explicit-any
+      let query: any = db.from("yontech_prospection_messages").select(columns, { count: "exact" });
       if (status === "queued") query = query.in("status", ["queued", "sending"]);
       else if (["sent", "failed", "skipped"].includes(status)) query = query.eq("status", status);
       if (q) query = query.or(`company.ilike.%${q}%,email.ilike.%${q}%`);
@@ -344,16 +346,14 @@ Deno.serve(async (req) => {
       // Filtre « Maquette » : prospects qui ont reçu une maquette (type, vue ou non), ou pas.
       if (maq === "sans") query = query.is("data->>maquette", null);
       else if (maq) {
-        // deno-lint-ignore no-explicit-any
-        let mq: any = db.from("yontech_maquettes").select("message_id").eq("review", "envoye").not("message_id", "is", null);
-        if (maq === "refonte" || maq === "creation") mq = mq.eq("kind", maq);
-        else if (maq === "vue") mq = mq.gt("views", 0);
-        else if (maq === "revue") mq = mq.gte("views", 2);
-        else if (maq === "pasvue") mq = mq.eq("views", 0);
-        else if (maq === "relance") mq = mq.not("view_followup_at", "is", null);
-        const { data: ids } = await mq.order("sent_at", { ascending: false }).limit(400);
-        const list = ((ids || []) as Rec[]).map((r) => r.message_id as string);
-        query = query.in("id", list.length ? list : ["00000000-0000-0000-0000-000000000000"]);
+        // Jointure sur la maquette envoyée (pas de liste d'identifiants dans l'adresse :
+        // au-delà de quelques centaines de maquettes, la requête devenait trop longue et échouait).
+        query = query.eq("yontech_maquettes.review", "envoye");
+        if (maq === "refonte" || maq === "creation") query = query.eq("yontech_maquettes.kind", maq);
+        else if (maq === "vue") query = query.gt("yontech_maquettes.views", 0);
+        else if (maq === "revue") query = query.gte("yontech_maquettes.views", 2);
+        else if (maq === "pasvue") query = query.eq("yontech_maquettes.views", 0);
+        else if (maq === "relance") query = query.not("yontech_maquettes.view_followup_at", "is", null);
       }
       if (status === "sent" && track) {
         if (track === "opened") query = query.not("opened_at", "is", null);
@@ -364,8 +364,9 @@ Deno.serve(async (req) => {
         else if (track === "scanner") query = query.not("scanner_at", "is", null).is("site_clicked_at", null).is("video_clicked_at", null);
       }
       query = status === "queued" ? query.order("score", { ascending: false, nullsFirst: false }).order("created_at") : query.order("sent_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
-      const { data, count, error } = await query.range((page - 1) * size, page * size - 1);
+      const { data: rowsRaw, count, error } = await query.range((page - 1) * size, page * size - 1);
       if (error) throw error;
+      const data = (rowsRaw || []) as Rec[];
       const suppressed = new Map<string, string>();
       if (status === "sent" && data?.length) {
         const { data: sup } = await db.from("yontech_prospection_suppressions").select("email,reason").in("email", data.map((m) => m.email));
