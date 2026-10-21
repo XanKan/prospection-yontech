@@ -1,6 +1,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { finalizeHtml } from "./yontech-maquette-design.ts";
+import { photoSelectors, polishHtml } from "./yontech-maquette-polish.ts";
 import { METIERS, metierOf } from "./yontech-maquette-creation.ts";
 import { px } from "./yontech-maquette-render.ts";
 import type { SiteData } from "./yontech-maquette.ts";
@@ -51,16 +52,54 @@ export function optionalPhotos(tpl: string) {
 /* ---------------- Moustaches ---------------- */
 type Ctx = Record<string, unknown>;
 const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// Les blocs d'un même nom peuvent s'imbriquer : {{#chiffres}}<section>…{{#chiffres}}élément{{/chiffres}}…</section>{{/chiffres}}.
+// Le bloc extérieur est alors une simple condition (section affichée une fois) et le
+// bloc intérieur la liste répétée. Une balise sans sa fermeture est ignorée.
+const vars = (s: string, ctx: Ctx) => s.replace(/\{\{\s*\/\s*\w+\s*\}\}/g, "").replace(/\{\{\s*([\w]+)\s*\}\}/g, (_m, k: string) => esc(ctx[k]));
 export function renderTemplate(tpl: string, ctx: Ctx): string {
-  const withSections = tpl.replace(/\{\{([#^])\s*([\w]+)\s*\}\}([\s\S]*?)\{\{\/\s*\2\s*\}\}/g, (_m, kind: string, key: string, inner: string) => {
+  const open = /\{\{([#^])\s*(\w+)\s*\}\}/g;
+  let out = "", i = 0;
+  for (let m = open.exec(tpl); m; m = open.exec(tpl)) {
+    out += vars(tpl.slice(i, m.index), ctx);
+    const [kind, key] = [m[1], m[2]];
+    const tags = new RegExp(`\\{\\{\\s*([#^/])\\s*${key}\\s*\\}\\}`, "g");
+    tags.lastIndex = m.index + m[0].length;
+    let depth = 1, close: RegExpExecArray | null = null;
+    for (let t = tags.exec(tpl); t; t = tags.exec(tpl)) { if (t[1] === "/" && --depth === 0) { close = t; break; } if (t[1] !== "/") depth++; }
+    if (!close) { i = m.index + m[0].length; open.lastIndex = i; continue; }
+    const inner = tpl.slice(m.index + m[0].length, close.index);
     const v = ctx[key];
     const truthy = Array.isArray(v) ? v.length > 0 : Boolean(v);
-    if (kind === "^") return truthy ? "" : renderTemplate(inner, ctx);
-    if (!truthy) return "";
-    if (Array.isArray(v)) return v.map((item, i) => renderTemplate(inner, { ...ctx, ...(item as Ctx), index: i + 1 })).join("");
-    return renderTemplate(inner, ctx);
-  });
-  return withSections.replace(/\{\{\s*([\w]+)\s*\}\}/g, (_m, k: string) => esc(ctx[k]));
+    if (kind === "^") out += truthy ? "" : renderTemplate(inner, ctx);
+    else if (truthy) {
+      const wrapper = new RegExp(`\\{\\{\\s*#\\s*${key}\\s*\\}\\}`).test(inner);
+      out += Array.isArray(v) && !wrapper ? v.map((item, n) => renderTemplate(inner, { ...ctx, ...(item as Ctx), index: n + 1 })).join("") : renderTemplate(inner, ctx);
+    }
+    i = close.index + close[0].length;
+    open.lastIndex = i;
+  }
+  return out + vars(tpl.slice(i), ctx);
+}
+
+// Contrôle de construction d'un modèle : une liste (prestations, atouts) dont la
+// boucle entoure une section entière répéterait toute la section, titre compris.
+// Listes annexes (chiffres, horaires) dont la boucle entoure une section entière : non affichées
+// (sinon une section par chiffre). La section des listes bien construites reste.
+export function loopsWrappingSection(html: string) {
+  const out: string[] = [];
+  for (const key of ["chiffres", "horaires"]) {
+    const m = String(html).match(new RegExp(`\\{\\{#${key}\\}\\}([\\s\\S]*?)\\{\\{/${key}\\}\\}`));
+    if (m && /<section\b/i.test(m[1]) && !new RegExp(`\\{\\{#${key}\\}\\}`).test(m[1])) out.push(key);
+  }
+  return out;
+}
+
+export function templateUsable(html: string) {
+  for (const key of ["services", "atouts"]) {
+    const m = String(html).match(new RegExp(`\\{\\{#${key}\\}\\}([\\s\\S]*?)\\{\\{/${key}\\}\\}`));
+    if (m && /<section\b/i.test(m[1]) && !new RegExp(`\\{\\{#${key}\\}\\}`).test(m[1])) return false;
+  }
+  return true;
 }
 
 /* ---------------- Transformation (une seule fois) ---------------- */
@@ -208,16 +247,15 @@ export async function collectTemplateLibrary(db: SupabaseClient) {
 }
 
 /* ---------------- Remplissage (sans IA) ---------------- */
+// Version des règles de remplissage : une maquette « maison » plus ancienne est
+// remplie de nouveau, avec le même modèle, par refreshMaison (cron des maquettes).
+export const MAISON_VERSION = 2;
+
 const pick = <T>(arr: T[] | undefined, seed: number) => (arr && arr.length ? arr[seed % arr.length] : undefined);
 const firstSentence = (t: string, n: number) => { const m = String(t || "").match(/^.{25,}?[.!?](\s|$)/); const s = (m ? m[0] : String(t || "")).trim(); return s.length > n ? s.slice(0, n).replace(/\s+\S*$/, "") + "…" : s; };
 const clean = (t: unknown) => String(t ?? "").replace(/\s+/g, " ").trim();
 const hash = (s: string) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-
-function caption(url: string) {
-  const name = decodeURIComponent(url.split("u=").pop() || url).split("?")[0].split("/").pop() || "";
-  const words = name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").replace(/\b\d+\b/g, "").replace(/\s+/g, " ").trim();
-  return /^(img|dsc|photo|image|pxl|wp|whatsapp)\b/i.test(words) || words.length < 6 || /\d{3,}/.test(words) ? "" : words.charAt(0).toUpperCase() + words.slice(1, 60);
-}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // Couleur d'accent de l'entreprise, seulement si elle reste lisible comme l'originale.
 function lum(hex: string) { const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
@@ -227,9 +265,41 @@ function accentOverride(tpl: string, brand: string) {
   return Math.abs(lum(orig) - lum(brand)) <= 0.12 ? `<style>:root{--yt-accent:${brand}}</style>` : "";
 }
 
+// Métier affiché : court, juste, et jamais « Bâtiment » pour une entreprise qui n'en est pas.
+const SHORT_METIERS: Record<string, string> = {
+  "41.10A": "Promotion immobilière", "41.10B": "Promotion immobilière", "41.10C": "Promotion immobilière", "41.10D": "Promotion immobilière",
+  "41.20A": "Construction de maisons", "41.20B": "Construction", "42.11Z": "Travaux routiers", "42.12Z": "Voies ferrées", "42.13A": "Ouvrages d'art",
+  "42.13B": "Travaux souterrains", "42.21Z": "Réseaux et canalisations", "42.22Z": "Réseaux électriques", "42.91Z": "Travaux maritimes", "42.99Z": "Génie civil",
+  "43.11Z": "Démolition", "43.12A": "Terrassement", "43.12B": "Terrassement", "43.13Z": "Forage", "43.21A": "Électricité", "43.21B": "Éclairage public",
+  "43.22A": "Plomberie, chauffage", "43.22B": "Chauffage, climatisation", "43.29A": "Isolation", "43.29B": "Équipements du bâtiment", "43.31Z": "Plâtrerie",
+  "43.32A": "Menuiserie", "43.32B": "Serrurerie, métallerie", "43.32C": "Agencement", "43.33Z": "Sols et revêtements", "43.34Z": "Peinture, vitrerie",
+  "43.39Z": "Finitions", "43.91A": "Charpente", "43.91B": "Couverture", "43.99A": "Étanchéité", "43.99B": "Structures métalliques", "43.99C": "Maçonnerie",
+  "43.99D": "Travaux spécialisés", "43.99E": "Location d'engins", "71.12B": "Bureau d'études", "81.30Z": "Paysagiste",
+};
+const DIVISIONS: Record<string, string> = {
+  "01": "Agriculture", "02": "Sylviculture", "03": "Pêche", "08": "Carrière", "10": "Agroalimentaire", "11": "Boissons", "13": "Textile", "14": "Habillement",
+  "15": "Maroquinerie", "16": "Travail du bois", "17": "Papier et carton", "18": "Imprimerie", "20": "Chimie", "22": "Plasturgie", "23": "Matériaux",
+  "24": "Métallurgie", "25": "Mécanique", "26": "Électronique", "27": "Équipements électriques", "28": "Machines", "29": "Automobile", "31": "Ameublement",
+  "32": "Fabrication", "33": "Maintenance industrielle", "35": "Énergie", "36": "Eau", "37": "Assainissement", "38": "Recyclage", "39": "Dépollution",
+  "41": "Construction", "42": "Génie civil", "43": "Bâtiment", "45": "Automobile", "46": "Commerce de gros", "47": "Commerce", "49": "Transport",
+  "50": "Transport fluvial", "52": "Logistique", "53": "Livraison", "55": "Hébergement", "56": "Restauration", "58": "Édition", "59": "Audiovisuel",
+  "60": "Radio", "61": "Télécommunications", "62": "Informatique", "63": "Services numériques", "64": "Finance", "65": "Assurance", "66": "Services financiers",
+  "68": "Immobilier", "69": "Conseil juridique et comptable", "70": "Conseil", "71": "Architecture et ingénierie", "72": "Recherche", "73": "Communication",
+  "74": "Services", "75": "Vétérinaire", "77": "Location", "78": "Recrutement", "79": "Voyages", "80": "Sécurité", "81": "Entretien", "82": "Services aux entreprises",
+  "85": "Formation", "86": "Santé", "87": "Accueil médico-social", "88": "Action sociale", "90": "Spectacle", "91": "Culture", "93": "Sport et loisirs",
+  "94": "Association", "95": "Réparation", "96": "Services à la personne",
+};
+export const isBtp = (naf: string) => /^4[123]\./.test(String(naf || "")) || Boolean(SHORT_METIERS[String(naf || "").toUpperCase()]);
+export function displayMetier(naf: string, fromCopy = "") {
+  const c = clean(fromCopy).replace(/[.;:]+$/, "");
+  if (c && c.length <= 32 && !/^(bâtiment|entreprise|société)$/i.test(c)) return cap(c);
+  const code = String(naf || "").toUpperCase();
+  return SHORT_METIERS[code] || DIVISIONS[code.slice(0, 2)] || "";
+}
+
 export type Pack = { accroches?: string[]; intros?: string[]; apropos_titres?: string[]; apropos?: string[]; services?: { titre: string; texte: string }[]; atouts?: { titre: string; texte: string }[]; cta?: string };
 
-export type CopyLite = { accroche?: string; intro?: string; apropos_titre?: string; apropos?: string; services?: { titre: string; texte: string }[]; atouts?: { titre: string; texte: string }[]; cta?: string };
+export type CopyLite = { metier?: string; accroche?: string; intro?: string; apropos_titre?: string; apropos?: string; services?: { titre: string; texte: string }[]; atouts?: { titre: string; texte: string }[]; cta?: string };
 
 // Rédaction des textes d'une refonte par Claude Haiku (≈ 0,1 centime par maquette) :
 // longueurs bornées pour tenir dans n'importe quel modèle, aucun fait inventé.
@@ -237,11 +307,11 @@ export let lastCopyError = "";
 export async function haikuCopy(d: SiteData, metier: string): Promise<CopyLite | null> {
   const apiKey = Deno.env.get("YONTECH_ANTHROPIC_API_KEY") || "";
   if (!apiKey) return null;
-  const src = [`Entreprise : ${d.name}`, `Métier : ${metier}`, `Ville : ${d.city}`, `Titre du site : ${d.tagline}`, `Introduction : ${d.intro}`,
+  const src = [`Entreprise : ${d.name}`, `Activité déclarée : ${metier || "(inconnue)"}`, `Ville : ${d.city}`, `Titre du site : ${d.tagline}`, `Introduction : ${d.intro}`,
     `Présentation : ${d.about.join(" ").slice(0, 1200)}`, `Pages et prestations du site : ${d.services.map((s) => `${s.title} — ${s.text}`).join(" | ").slice(0, 2500)}`,
     `Faits : ${(d.facts || []).map((f) => f.value + " " + f.label).join(" ; ")}`].join("\n");
-  const prompt = `À partir du contenu du site d'une entreprise, rédige les textes de sa nouvelle page d'accueil, en français, ton professionnel et concret. Aucun fait inventé (ni chiffre, année, label, garantie, prix, avis). Les prestations sont de vrais travaux ou services (pas des pages comme « Historique », « Notre équipe », « Contact »). Orthographe irréprochable, pas d'emoji.
-Réponds UNIQUEMENT par un JSON : {"accroche":"4 à 7 mots, sans le nom","intro":"25 à 35 mots","apropos_titre":"2 à 5 mots","apropos":"40 à 60 mots","services":[3 à 6 {"titre":"2 à 4 mots","texte":"12 à 20 mots"}],"atouts":[3 {"titre":"2 à 4 mots","texte":"8 à 15 mots"}],"cta":"2 à 4 mots"}
+  const prompt = `À partir du contenu du site d'une entreprise, rédige les textes de sa nouvelle page d'accueil, en français, ton professionnel et concret. Aucun fait inventé (ni chiffre, année, label, garantie, prix, avis). Les prestations sont de vrais travaux, produits ou services de l'entreprise (pas des pages comme « Historique », « Notre équipe », « Contact », ni des noms de villes). Le métier est l'activité réelle lue sur le site, en 1 à 3 mots (ex. « Serrurerie », « Animalerie », « Audioprothésiste », « Bureau d'études thermiques »), jamais un mot vague comme « Bâtiment » ou « Entreprise ». Orthographe irréprochable, pas d'emoji.
+Réponds UNIQUEMENT par un JSON : {"metier":"1 à 3 mots","accroche":"4 à 7 mots, sans le nom","intro":"25 à 35 mots","apropos_titre":"2 à 5 mots","apropos":"40 à 60 mots","services":[3 à 6 {"titre":"2 à 4 mots","texte":"12 à 20 mots"}],"atouts":[3 {"titre":"2 à 4 mots","texte":"8 à 15 mots"}],"cta":"2 à 4 mots"}
 
 ${src}`;
   try {
@@ -257,72 +327,140 @@ ${src}`;
     const j = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const cut = (v: unknown, n: number) => clean(v).slice(0, n);
     return {
-      accroche: cut(j.accroche, 70), intro: cut(j.intro, 280), apropos_titre: cut(j.apropos_titre, 50), apropos: cut(j.apropos, 480), cta: cut(j.cta, 30),
+      metier: cut(j.metier, 32), accroche: cut(j.accroche, 70), intro: cut(j.intro, 280), apropos_titre: cut(j.apropos_titre, 50), apropos: cut(j.apropos, 480), cta: cut(j.cta, 30),
       services: (Array.isArray(j.services) ? j.services : []).slice(0, 6).map((x: Record<string, unknown>) => ({ titre: cut(x.titre, 40), texte: cut(x.texte, 160) })).filter((x: { titre: string }) => x.titre),
       atouts: (Array.isArray(j.atouts) ? j.atouts : []).slice(0, 3).map((x: Record<string, unknown>) => ({ titre: cut(x.titre, 40), texte: cut(x.texte, 120) })).filter((x: { titre: string }) => x.titre),
     };
   } catch (e) { lastCopyError = (e as Error).message; console.error("[Haiku]", lastCopyError); return null; }
 }
 
-export function buildContext(d: SiteData, kind: string, pack: Pack | null, metier: string, copy: CopyLite | null = null) {
+// Contexte de remplissage. Les textes types du bâtiment (pack) ne servent qu'aux
+// entreprises du bâtiment ; ailleurs, seuls les textes du site ou de la rédaction.
+export function buildContext(d: SiteData, kind: string, pack: Pack | null, metier: string, copy: CopyLite | null = null, btp = true) {
   const seed = hash(d.name + d.city);
+  const p = btp ? pack : null;
   const sub = (t: string) => clean(t).replaceAll("{{nom}}", d.name).replaceAll("{{ville}}", d.city || "votre secteur");
   const photos: string[] = [];
-  for (const u of [d.heroImage, ...(d.gallery || []), d.aboutImage, d.bandImage, ...d.services.map((s) => s.image), ...d.images]) { const p = px(u || ""); if (p && !photos.includes(p) && p !== px(d.logo)) photos.push(p); }
+  for (const u of [d.heroImage, ...(d.gallery || []), d.aboutImage, d.bandImage, ...d.services.map((s) => s.image), ...d.images]) { const x = px(u || ""); if (x && !photos.includes(x) && x !== px(d.logo)) photos.push(x); }
   const tagline = clean(d.tagline);
-  const servicesSite = d.services.filter((s) => clean(s.title).length >= 3).slice(0, 6).map((s, i) => ({ titre: clean(s.title), texte: clean(s.text) ? firstSentence(s.text, 170) : sub(pack?.services?.[i % (pack?.services?.length || 1)]?.texte || "") }));
-  const services = kind === "refonte" && servicesSite.length >= 3 ? servicesSite : (pack?.services || []).slice(0, 6).map((s) => ({ titre: sub(s.titre), texte: sub(s.texte) }));
+  // Prestations lues sur le site : de vrais intitulés (pas une année, un nombre ou une adresse de page).
+  const servicesSite = d.services.filter((s) => /[A-Za-zÀ-ÿ]{3,}/.test(clean(s.title)) && !/^\W*\d[\d\s.,/-]*\W*$/.test(clean(s.title)) && !/https?:|www\./i.test(s.title)).slice(0, 6).map((s, i) => ({ titre: clean(s.title), texte: clean(s.text) ? firstSentence(s.text, 170) : sub(p?.services?.[i % (p?.services?.length || 1)]?.texte || "") })).filter((s) => s.texte);
+  const services = copy?.services && copy.services.length >= 3 ? copy.services
+    : kind === "refonte" && servicesSite.length >= 3 ? servicesSite
+    : (p?.services || []).slice(0, 6).map((s) => ({ titre: sub(s.titre), texte: sub(s.texte) }));
+  const ville = d.city || "";
   const ctx: Ctx = {
-    nom: d.name, metier: (metier.split(/\s+(?:et|de|des|du|sur|à)\s+|,/)[0] || metier).replace(/^./, (c) => c.toUpperCase()), ville: d.city, kicker: [metier.charAt(0).toUpperCase() + metier.slice(1), d.city].filter(Boolean).join(" · "),
-    adresse: d.address || d.city, adresse_url: encodeURIComponent([d.address || "", d.city || "", "France"].filter(Boolean).join(", ")),
+    nom: d.name, metier, ville, kicker: [metier, ville].filter(Boolean).join(" · "),
+    adresse: d.address || ville, adresse_url: encodeURIComponent([d.address || "", ville, "France"].filter(Boolean).join(", ")),
     telephone: d.phone, tel: (d.phone || "").replace(/[^\d+]/g, ""), email: d.email, logo_url: d.logo ? px(d.logo) : "",
-    accroche: kind === "refonte" && tagline.length >= 12 && tagline.length <= 90 ? tagline : sub(pick(pack?.accroches, seed) || `${metier} à ${d.city}`),
-    intro: kind === "refonte" && clean(d.intro).length >= 40 ? firstSentence(d.intro, 260) : sub(pick(pack?.intros, seed) || ""),
-    apropos_titre: sub(pick(pack?.apropos_titres, seed) || "L'entreprise"),
-    apropos: kind === "refonte" && clean(d.about[0]).length >= 60 ? firstSentence(d.about.join(" "), 420) : sub(pick(pack?.apropos, seed) || d.about[0] || ""),
-    cta: pack?.cta || "Demander un devis",
-    services, atouts: (pack?.atouts || []).map((a) => ({ titre: sub(a.titre), texte: sub(a.texte) })),
-    chiffres: (d.facts || []).slice(0, 4).map((f) => ({ valeur: f.value, label: f.label })),
+    accroche: copy?.accroche || (kind === "refonte" && tagline.length >= 12 && tagline.length <= 90 ? tagline : sub(pick(p?.accroches, seed) || [metier, ville && `à ${ville}`].filter(Boolean).join(" ") || d.name)),
+    intro: copy?.intro || (kind === "refonte" && clean(d.intro).length >= 40 ? firstSentence(d.intro, 260) : sub(pick(p?.intros, seed) || "")),
+    apropos_titre: copy?.apropos_titre || sub(pick(p?.apropos_titres, seed) || "L'entreprise"),
+    apropos: copy?.apropos || (kind === "refonte" && clean(d.about[0]).length >= 60 ? firstSentence(d.about.join(" "), 420) : sub(pick(p?.apropos, seed) || d.about[0] || "")),
+    cta: copy?.cta || p?.cta || "Prendre contact",
+    services,
+    atouts: copy?.atouts && copy.atouts.length ? copy.atouts : (p?.atouts || []).map((a) => ({ titre: sub(a.titre), texte: sub(a.texte) })),
+    // Chiffres clés : seulement de vrais nombres, et au moins deux (un chiffre seul fait une section vide).
+    chiffres: (() => { const f = (d.facts || []).filter((x) => /\d/.test(String(x.value)) && clean(x.label)).slice(0, 4); return f.length >= 2 ? f.map((x) => ({ valeur: x.value, label: x.label })) : []; })(),
     horaires: d.hours.map((h) => ({ ligne: h })),
   };
-  photos.slice(0, 12).forEach((u, i) => { ctx[`photo${i + 1}`] = u; ctx[`legende${i + 1}`] = caption(u); });
-  if (copy) {
-    for (const k of ["accroche", "intro", "apropos_titre", "apropos", "cta"] as const) if (copy[k]) ctx[k] = copy[k];
-    if (copy.services && copy.services.length >= 3) ctx.services = copy.services;
-    if (copy.atouts && copy.atouts.length) ctx.atouts = copy.atouts;
-  }
+  // Pas de légende tirée des noms de fichiers (« Slide home », « FB serrurerie… ») : les légendes vides disparaissent.
+  photos.slice(0, 12).forEach((u, i) => { ctx[`photo${i + 1}`] = u; ctx[`legende${i + 1}`] = ""; });
   return { ctx, photos };
 }
 
-// Choisit un modèle compatible (type, nombre de photos), le moins utilisé, et remplit la page.
-export async function fillFromLibrary(db: SupabaseClient, d: SiteData, kind: "refonte" | "creation", naf = "") {
-  const groupe = groupeOf(naf);
-  const metier = metierOf(naf, "");
-  const { data: packRow } = await db.from("yontech_metier_textes").select("data").in("metier", [metier || "bâtiment", "bâtiment"]).limit(2);
-  const pack = ((packRow || []).find(Boolean)?.data || null) as Pack | null;
-  // Refonte : textes rédigés par Claude Haiku si le réglage le permet (sinon textes du site et du métier).
-  let copy: CopyLite | null = null;
-  if (kind === "refonte") {
-    const { data: st } = await db.from("yontech_prospection_settings").select("copy_ai").eq("id", 1).single();
-    if (st?.copy_ai !== false) copy = await haikuCopy(d, metier || "bâtiment");
-  }
-  const { ctx, photos } = buildContext(d, kind, pack, metier || "bâtiment", copy);
-  // Modèles du même type ; création : sans photo. Priorité à la même famille de métiers,
-  // puis à ceux qui ont au plus autant de photos que l'entreprise, puis aux moins utilisés.
-  let q = db.from("yontech_maquette_templates").select("id,famille,groupe,html,photos,uses").eq("status", "ok").eq("kind", kind);
-  if (kind === "creation") q = q.eq("photos", 0);
-  const { data: all } = await q.limit(200);
-  if (!all?.length) return null;
-  const score = (t: { groupe?: string; photos: number; uses: number }) => (t.groupe === groupe ? 0 : 1000) + (t.photos <= photos.length ? 0 : 100) + (t.uses || 0);
-  const ranked = [...all].sort((a, b) => score(a) - score(b));
-  const best = ranked.filter((t) => score(t) < score(ranked[0]) + 3);
-  const tpl = best[Math.floor(Math.random() * best.length)];
+export type MaisonTemplate = { id: string; famille?: string; groupe?: string; html: string; photos: number; uses?: number };
+
+// Remplit un modèle (sans base de données) : utilisé par la préparation, le rafraîchissement et le banc d'essai.
+export function renderMaison(tpl: MaisonTemplate, d: SiteData, kind: string, metier: string, pack: Pack | null, copy: CopyLite | null, btp: boolean) {
+  const { ctx, photos } = buildContext(d, kind, pack, metier, copy, btp);
+  if ((ctx.services as unknown[]).length < 3) return { error: "pas assez de prestations réelles" } as const;
+  for (const key of loopsWrappingSection(String(tpl.html))) ctx[key] = [];
   for (let i = photos.length + 1; i <= 12; i++) { ctx[`photo${i}`] = ""; ctx[`legende${i}`] = ""; }
+  const missing: string[] = [];
+  for (const [n, sels] of photoSelectors(String(tpl.html))) if (n > Math.min(photos.length, tpl.photos)) missing.push(...sels);
   let html = renderTemplate(optionalPhotos(String(tpl.html)), ctx);
   html = html.replace(/<\/head>/i, accentOverride(String(tpl.html), d.accent) + "</head>");
+  html = polishHtml(html, { name: d.name, missingPhotoSelectors: missing });
   const allowed = [ctx.logo_url as string, ...photos.slice(0, tpl.photos)].filter(Boolean);
   const out = finalizeHtml(html, d, allowed);
+  if ("error" in out) return { error: out.error } as const;
+  return { html: out.html, images: allowed, direction: `Modèle ${tpl.famille}${tpl.groupe ? " · " + tpl.groupe : ""}` };
+}
+
+// Modèle d'une maquette déjà faite : retrouvé par sa feuille de style (même modèle, même style).
+const styleKey = (html: string) => ((String(html).match(/<style\b[^>]*>([\s\S]*?)<\/style>/i) || [])[1] || "")
+  .replace(/url\([^)]*\)/g, "").replace(/\{\{[^}]*\}\}/g, "").replace(/--yt-accent\s*:\s*#[0-9a-f]{3,8}/gi, "").replace(/\s+/g, "").slice(0, 4000);
+export function matchTemplate(html: string, templates: MaisonTemplate[]) {
+  const k = styleKey(html);
+  if (k.length < 200) return null;
+  return templates.find((t) => styleKey(t.html) === k) || null;
+}
+
+type MaisonInfo = { v: number; modele: string; copie?: CopyLite | null; metier?: string };
+
+// Choisit un modèle compatible (type, nombre de photos), le moins utilisé, et remplit la page.
+// options.modele : garder le modèle d'une maquette existante (rafraîchissement).
+export async function fillFromLibrary(db: SupabaseClient, d: SiteData & { maison?: MaisonInfo }, kind: "refonte" | "creation", naf = "", options: { modele?: string } = {}) {
+  const btp = kind === "creation" || isBtp(naf);
+  const groupe = groupeOf(naf);
+  const nafMetier = metierOf(naf, "");
+  const { data: packRow } = btp ? await db.from("yontech_metier_textes").select("metier,data").in("metier", [nafMetier || "bâtiment", "bâtiment"]).limit(2) : { data: [] };
+  const pack = ((packRow || []).find((r) => r.metier === nafMetier) || (packRow || [])[0])?.data as Pack | null || null;
+  // Refonte : textes rédigés par Claude Haiku si le réglage le permet (gardés pour les rafraîchissements).
+  let copy: CopyLite | null = d.maison?.copie || null;
+  if (kind === "refonte" && !copy) {
+    const { data: st } = await db.from("yontech_prospection_settings").select("copy_ai").eq("id", 1).single();
+    if (st?.copy_ai !== false) copy = await haikuCopy(d, nafMetier || displayMetier(naf));
+  }
+  // Hors bâtiment, les textes types ne conviennent pas : sans rédaction réussie, pas de maquette.
+  if (kind === "refonte" && !btp && !copy) return null;
+  const metier = displayMetier(naf, copy?.metier || "");
+  let q = db.from("yontech_maquette_templates").select("id,famille,groupe,html,photos,uses").eq("status", "ok").eq("kind", kind);
+  if (kind === "creation") q = q.eq("photos", 0);
+  const { data: rows } = await q.limit(200);
+  const all = (rows || []).filter((t) => templateUsable(String(t.html)));
+  if (!all.length) return null;
+  const nbPhotos = buildContext(d, kind, pack, metier, copy, btp).photos.length;
+  let tpl = options.modele ? (all.find((t) => t.id === options.modele) || null) : null;
+  if (!tpl) {
+    const score = (t: { groupe?: string; photos: number; uses: number }) => (t.groupe === groupe ? 0 : 1000) + (t.photos <= nbPhotos ? 0 : 100) + (t.uses || 0);
+    const ranked = [...all].sort((a, b) => score(a) - score(b));
+    const best = ranked.filter((t) => score(t) < score(ranked[0]) + 3);
+    tpl = best[Math.floor(Math.random() * best.length)];
+  }
+  const out = renderMaison(tpl as MaisonTemplate, d, kind, metier, pack, copy, btp);
   if ("error" in out) return null;
-  await db.from("yontech_maquette_templates").update({ uses: (tpl.uses || 0) + 1 }).eq("id", tpl.id);
-  return { html: out.html, direction: `Modèle ${tpl.famille}${tpl.groupe ? " · " + tpl.groupe : ""}`, images: allowed };
+  if (!options.modele) await db.from("yontech_maquette_templates").update({ uses: (tpl.uses || 0) + 1 }).eq("id", tpl.id);
+  d.maison = { v: MAISON_VERSION, modele: tpl.id, copie: copy, metier };
+  return { html: out.html, direction: out.direction, images: out.images, modele: tpl.id };
+}
+
+// Rafraîchissement : les maquettes « maison » faites avec d'anciennes règles sont
+// remplies de nouveau (même modèle, mêmes textes rédigés), quelques-unes par passage.
+// Les maquettes à valider passent d'abord (« a_valider » avant « envoye »), dans un budget de temps.
+export async function refreshMaison(db: SupabaseClient, limit = 8, budgetMs = 45_000) {
+  const started = Date.now();
+  const { data: rows } = await db.from("yontech_maquettes").select("id,kind,html,data,message_id,yontech_prospection_messages(data)")
+    .eq("maison", true).eq("status", "en_ligne").or(`data->maison->v.is.null,data->maison->>v.lt.${MAISON_VERSION}`)
+    .order("review", { ascending: true }).order("prepared_at", { ascending: false }).limit(limit);
+  if (!rows?.length) return { refreshed: 0 };
+  const { data: templates } = await db.from("yontech_maquette_templates").select("id,famille,groupe,html,photos").eq("status", "ok");
+  let refreshed = 0, kept = 0;
+  for (const r of rows as Record<string, any>[]) {
+    if (Date.now() - started > budgetMs) break;
+    const d = r.data as SiteData & { maison?: MaisonInfo };
+    const kind = (r.kind || "refonte") as "refonte" | "creation";
+    const naf = String(r.yontech_prospection_messages?.data?.naf || "");
+    const modele = d.maison?.modele || matchTemplate(String(r.html || ""), (templates || []) as MaisonTemplate[])?.id;
+    const lib = await fillFromLibrary(db, d, kind, naf, { modele });
+    if (!lib) {
+      // Pas de version corrigée possible (trop peu de prestations réelles) : la maquette garde sa page, marquée à jour.
+      await db.from("yontech_maquettes").update({ data: { ...d, maison: { v: MAISON_VERSION, modele: modele || "", copie: d.maison?.copie || null } } }).eq("id", r.id);
+      kept++; continue;
+    }
+    await db.from("yontech_maquettes").update({ html: lib.html, data: d, design_direction: lib.direction, design_images: lib.images, updated_at: new Date().toISOString() }).eq("id", r.id);
+    refreshed++;
+  }
+  return { refreshed, kept };
 }
